@@ -1,0 +1,15 @@
+ARG REGISTRY_MIRROR=""
+FROM ${REGISTRY_MIRROR}python:3.11-slim
+
+LABEL description="nanobot eval-bench: Mock API services for task skill testing"
+
+WORKDIR /mocks
+
+EXPOSE 18080
+
+# 健康检查
+HEALTHCHECK --interval=3s --timeout=2s --retries=5 \
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:18080/health')" || exit 1
+
+# Mock 脚本通过 volume 挂载
+CMD ["python3", "volcengine_mock.py"]

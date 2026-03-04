@@ -1,0 +1,44 @@
+ARG REGISTRY_MIRROR=""
+FROM ${REGISTRY_MIRROR}python:3.11-slim
+
+LABEL description="nanobot eval-bench: Base image with all dependencies pre-installed"
+LABEL version="1.1"
+
+# ─── Build args for mirror support ──────────────────────
+ARG PIP_INDEX_URL=""
+
+# ─── 系统依赖 ───────────────────────────────────────────
+# lxml 需要 libxml2, Pillow 需要 libjpeg, git 用于 nanobot 内部操作
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl jq tree \
+    libxml2-dev libxslt1-dev \
+    libjpeg-dev zlib1g-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# ─── nanobot 的 Python 依赖（不装 nanobot 本身）─────────
+# 从 pyproject.toml 提取的 dependencies，提前安装以加速后续构建
+# 版本范围与 nanobot pyproject.toml 保持一致
+COPY platform/requirements-deps.txt /tmp/requirements-deps.txt
+RUN if [ -n "$PIP_INDEX_URL" ]; then \
+        pip install --no-cache-dir -i "$PIP_INDEX_URL" -r /tmp/requirements-deps.txt; \
+    else \
+        pip install --no-cache-dir -r /tmp/requirements-deps.txt; \
+    fi \
+    && rm /tmp/requirements-deps.txt
+
+# ─── 评测框架依赖 ──────────────────────────────────────
+RUN if [ -n "$PIP_INDEX_URL" ]; then \
+        pip install --no-cache-dir -i "$PIP_INDEX_URL" pytest pyyaml pytest-json-report; \
+    else \
+        pip install --no-cache-dir pytest pyyaml pytest-json-report; \
+    fi
+
+# ─── 清理 build 工具（减小镜像体积）───────────────────
+RUN apt-get purge -y build-essential && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# ─── 验证关键依赖 ──────────────────────────────────────
+RUN python3 -c "import litellm; import pydantic; import httpx; import typer; print('All deps OK')"
+
+WORKDIR /eval

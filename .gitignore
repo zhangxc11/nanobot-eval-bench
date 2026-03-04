@@ -1,0 +1,18 @@
+# Eval results
+results/
+
+# nanobot source code (synced at runtime, not committed)
+nanobot-src/
+
+# Environment
+.env
+
+# Docker
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Nested git repos in task initial_state (pack.sh handles these separately)
+tasks/*/initial_state/project_code/.git/

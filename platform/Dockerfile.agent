@@ -1,0 +1,25 @@
+ARG REGISTRY_MIRROR=""
+FROM eval-bench-base:latest
+
+LABEL description="nanobot eval-bench: Agent execution environment"
+
+# ─── nanobot 源码（不 pip install，直接放源码）────────
+# 构建时从 context 中 COPY nanobot 源码目录
+# 运行时通过 PYTHONPATH 让 Python 找到它
+COPY nanobot-src/ /opt/nanobot-src/
+
+# 设置 PYTHONPATH：让 `import nanobot` 能找到源码
+# /opt/nanobot-src/ 下应有 nanobot/ 目录（即 repo 根目录的内容）
+ENV PYTHONPATH="/opt/nanobot-src:${PYTHONPATH}"
+
+# 验证 nanobot 可导入
+RUN python3 -c "import nanobot; print(f'nanobot {nanobot.__version__} loaded from source')"
+
+# ─── 评测执行器 ────────────────────────────────────────
+COPY platform/runner.py /opt/eval/runner.py
+
+# ─── 运行环境 ──────────────────────────────────────────
+ENV HOME=/eval
+WORKDIR /eval
+
+CMD ["python3", "/opt/eval/runner.py"]

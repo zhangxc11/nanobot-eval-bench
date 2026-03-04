@@ -1,0 +1,9 @@
+{
+  "_comment": "此配置仅作为参考，实际配置由 runner.py 动态生成到容器内",
+  "providers": {
+    "mock-volcengine": {
+      "apiKey": "mock-volcengine-api-key",
+      "apiBase": "http://mock-api:18080"
+    }
+  }
+}
