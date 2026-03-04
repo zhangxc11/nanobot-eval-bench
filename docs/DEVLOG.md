@@ -98,3 +98,34 @@
 
 ### 完成时间
 - 2026-03-04 18:10
+
+## Phase 4.5: dev-workflow 规范补齐 + Git 初始化 (2026-03-04)
+
+### 背景
+- 项目此前无 git 仓库，缺少 docs/REQUIREMENTS.md 和 docs/ARCHITECTURE.md
+- 按 dev-workflow 规范补齐文档结构并初始化 git
+
+### 改动清单
+- [x] 4.5.1 创建 docs/REQUIREMENTS.md — 需求文档（R1~R8 + 任务来源 + 演进路线）
+- [x] 4.5.2 创建 docs/ARCHITECTURE.md — 架构设计（引用 DESIGN.md，精简版架构概览）
+- [x] 4.5.3 更新 DESIGN.md：修复架构图（LLM Evaluator → Results + Verification）、删除重复 runner.py 行
+- [x] 4.5.4 更新 .gitignore：排除嵌套 git 仓库的 .git 目录
+- [x] 4.5.5 初始化 git 仓库，初始 commit `30d1bb0`（110 files, 17965 insertions）
+- [x] 4.5.6 DEVLOG.md 记录本 Phase
+
+### 完成时间
+- 2026-03-04 22:49
+
+### 当前 Git 状态
+- 分支: `main`
+- HEAD: `30d1bb0`
+- 远程: 暂无（待推送至 GitHub）
+
+---
+
+## 🔜 待办
+
+- [ ] 推送至 GitHub 仓库 (`zhangxc11/nanobot-eval-bench`)
+- [ ] 新增更多评测任务（从 A2~A16 / B 类中选取）
+- [ ] 实际端到端运行验证（Docker 环境）
+- [ ] 报告生成器 (reporter.py)
