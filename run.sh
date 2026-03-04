@@ -250,6 +250,9 @@ print(f\"  Verified:   {r['verification']['passed']}/{r['verification']['total']
 m = r['metrics']
 print(f\"  Tool calls: {m['tool_calls']}\")
 print(f\"  LLM calls:  {m['llm_calls']}\")
+total_tokens = m.get('total_tokens', 0)
+if total_tokens > 0:
+    print(f\"  Tokens:     {total_tokens:,} (prompt: {m.get('prompt_tokens',0):,}, completion: {m.get('completion_tokens',0):,})\")
 print(f\"  Wall time:  {m['wall_time_seconds']}s\")
 print()
 print('  Verification details:')

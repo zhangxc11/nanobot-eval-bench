@@ -26,6 +26,7 @@ import asyncio
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -482,43 +483,12 @@ def verify_criterion(criterion: str, task: dict) -> bool:
     Supports:
     - File existence: "path 存在" / "path exists"
     - File content: "path 包含 keyword" / "path contains keyword"
+    - Combined: "path 存在且包含 keyword" / "path exists and contains keyword"
     - Task-specific rules (backward-compatible with task-001)
     """
     ws = WORKSPACE
 
-    # ─── Generic: file existence ────────────────────
-    if criterion.endswith("存在") or criterion.endswith("exists"):
-        path_str = criterion.rsplit("存在", 1)[0].rsplit("exists", 1)[0].strip()
-        if "且" in path_str:
-            path_str = path_str.split("且")[0].strip()
-        if " and " in path_str.lower():
-            path_str = path_str.split(" and ")[0].strip()
-
-        target = ws / path_str
-        if not target.exists():
-            target = EVAL_HOME / path_str
-        return target.exists()
-
-    # ─── Generic: file contains keyword ─────────────
-    if "包含" in criterion or "contains" in criterion.lower():
-        # Format: "path 包含 keyword" or "path contains keyword"
-        if "包含" in criterion:
-            parts = criterion.split("包含", 1)
-        else:
-            parts = criterion.lower().split("contains", 1)
-            parts[0] = criterion[:len(parts[0])]  # preserve original case for path
-        path_str = parts[0].strip()
-        keyword = parts[1].strip() if len(parts) > 1 else ""
-
-        target = ws / path_str
-        if not target.exists():
-            target = EVAL_HOME / path_str
-        if not target.exists():
-            return False
-        content = target.read_text()
-        return keyword.lower() in content.lower()
-
-    # ─── Task-001 specific rules (backward-compatible) ─────
+    # ─── Task-001 specific rules (checked first to avoid generic mismatch) ─
     if "SKILL.md" in criterion and "doubao-search" in criterion:
         path = ws / "skills/doubao-search/SKILL.md"
         if not path.exists():
@@ -563,6 +533,68 @@ def verify_criterion(criterion: str, task: dict) -> bool:
     if "REQUIREMENTS.md" in criterion:
         return (ws / "skills/doubao-search/docs/REQUIREMENTS.md").exists()
 
+    # ─── Generic: combined "存在且包含" / "exists and contains" ─
+    if ("存在且包含" in criterion or
+            ("exists" in criterion.lower() and "contains" in criterion.lower())):
+        if "存在且包含" in criterion:
+            parts = criterion.split("存在且包含", 1)
+        else:
+            # "path exists and contains keyword"
+            idx = criterion.lower().index("exists")
+            parts = [criterion[:idx].strip()]
+            rest = criterion[idx + len("exists"):]
+            # strip " and contains " or " and contains"
+            rest = rest.strip()
+            if rest.lower().startswith("and contains"):
+                rest = rest[len("and contains"):].strip()
+            elif rest.lower().startswith("and"):
+                rest = rest[3:].strip()
+                if rest.lower().startswith("contains"):
+                    rest = rest[len("contains"):].strip()
+            parts.append(rest)
+        path_str = parts[0].strip()
+        keyword = parts[1].strip() if len(parts) > 1 else ""
+
+        target = ws / path_str
+        if not target.exists():
+            target = EVAL_HOME / path_str
+        if not target.exists():
+            return False
+        content = target.read_text()
+        return keyword.lower() in content.lower()
+
+    # ─── Generic: file existence ────────────────────
+    if criterion.endswith("存在") or criterion.endswith("exists"):
+        path_str = criterion.rsplit("存在", 1)[0].rsplit("exists", 1)[0].strip()
+        if "且" in path_str:
+            path_str = path_str.split("且")[0].strip()
+        if " and " in path_str.lower():
+            path_str = path_str.split(" and ")[0].strip()
+
+        target = ws / path_str
+        if not target.exists():
+            target = EVAL_HOME / path_str
+        return target.exists()
+
+    # ─── Generic: file contains keyword ─────────────
+    if "包含" in criterion or "contains" in criterion.lower():
+        # Format: "path 包含 keyword" or "path contains keyword"
+        if "包含" in criterion:
+            parts = criterion.split("包含", 1)
+        else:
+            parts = criterion.lower().split("contains", 1)
+            parts[0] = criterion[:len(parts[0])]  # preserve original case for path
+        path_str = parts[0].strip()
+        keyword = parts[1].strip() if len(parts) > 1 else ""
+
+        target = ws / path_str
+        if not target.exists():
+            target = EVAL_HOME / path_str
+        if not target.exists():
+            return False
+        content = target.read_text()
+        return keyword.lower() in content.lower()
+
     # Default: unknown criterion passes with warning
     print(f"[runner] WARNING: Unknown criterion, defaulting to pass: {criterion[:80]}",
           file=sys.stderr)
@@ -570,7 +602,7 @@ def verify_criterion(criterion: str, task: dict) -> bool:
 
 
 def collect_metrics(start_time: float, task: dict) -> RunMetrics:
-    """Collect execution metrics from session JSONL."""
+    """Collect execution metrics from session JSONL and analytics.db."""
     metrics = RunMetrics()
     metrics.wall_time_seconds = time.time() - start_time
 
@@ -588,6 +620,51 @@ def collect_metrics(start_time: float, task: dict) -> RunMetrics:
                                 metrics.total_llm_calls += 1
                     except json.JSONDecodeError:
                         pass
+
+    # ─── Token usage from analytics.db ──────────────
+    analytics_db = WORKSPACE / "analytics.db"
+    if analytics_db.exists():
+        try:
+            conn = sqlite3.connect(str(analytics_db))
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM(prompt_tokens), 0)     AS prompt_tokens,
+                       COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                       COALESCE(SUM(total_tokens), 0)      AS total_tokens
+                FROM token_usage
+                WHERE session_key = ?
+                """,
+                (SESSION_ID,),
+            ).fetchone()
+            if row:
+                metrics.total_prompt_tokens = row["prompt_tokens"]
+                metrics.total_completion_tokens = row["completion_tokens"]
+            # If no records for this session, try summing all records
+            # (in case session_key format differs)
+            if row and row["total_tokens"] == 0:
+                row_all = conn.execute(
+                    """
+                    SELECT COALESCE(SUM(prompt_tokens), 0)     AS prompt_tokens,
+                           COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                           COALESCE(SUM(total_tokens), 0)      AS total_tokens
+                    FROM token_usage
+                    """
+                ).fetchone()
+                if row_all and row_all["total_tokens"] > 0:
+                    metrics.total_prompt_tokens = row_all["prompt_tokens"]
+                    metrics.total_completion_tokens = row_all["completion_tokens"]
+                    print(f"[runner] Token usage: no records for session '{SESSION_ID}', "
+                          f"using all records (total_tokens={row_all['total_tokens']})",
+                          file=sys.stderr)
+            conn.close()
+            print(f"[runner] Token usage from analytics.db: "
+                  f"prompt={metrics.total_prompt_tokens}, "
+                  f"completion={metrics.total_completion_tokens}, "
+                  f"total={metrics.total_prompt_tokens + metrics.total_completion_tokens}",
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"[runner] WARNING: Failed to read analytics.db: {e}", file=sys.stderr)
 
     # Count files in relevant directories
     count_dirs = []
@@ -685,6 +762,7 @@ async def main():
     metrics = collect_metrics(start_time, task)
 
     # 8. Output results
+    total_tokens = metrics.total_prompt_tokens + metrics.total_completion_tokens
     summary = {
         "task_id": task_id,
         "task_name": task["name"],
@@ -695,6 +773,9 @@ async def main():
         "metrics": {
             "tool_calls": metrics.total_tool_calls,
             "llm_calls": metrics.total_llm_calls,
+            "prompt_tokens": metrics.total_prompt_tokens,
+            "completion_tokens": metrics.total_completion_tokens,
+            "total_tokens": total_tokens,
             "wall_time_seconds": round(metrics.wall_time_seconds, 1),
             "files_created": metrics.files_created,
         },
@@ -712,6 +793,11 @@ async def main():
     print(f"[runner] Done! Wall time: {metrics.wall_time_seconds:.1f}s", file=sys.stderr)
     print(f"[runner] Tool calls: {metrics.total_tool_calls}, LLM calls: {metrics.total_llm_calls}",
           file=sys.stderr)
+    if total_tokens > 0:
+        print(f"[runner] Tokens: {total_tokens:,} "
+              f"(prompt: {metrics.total_prompt_tokens:,}, "
+              f"completion: {metrics.total_completion_tokens:,})",
+              file=sys.stderr)
     print(f"[runner] Result: {'PASS' if summary['success'] else 'FAIL'}", file=sys.stderr)
     print(f"{'='*60}", file=sys.stderr)
 

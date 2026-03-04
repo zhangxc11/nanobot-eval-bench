@@ -209,12 +209,17 @@ class TestNoBreakingChanges:
             "loop.py should still have run method"
 
     def test_loop_has_chat_method(self):
-        """loop.py 应保留 _chat 相关方法"""
+        """loop.py 应保留 LLM 调用相关方法"""
         loop_path = PROJECT_DIR / "nanobot" / "agent" / "loop.py"
         content = loop_path.read_text()
+        # Original nanobot code calls LLM via self.provider.chat() inside
+        # _run_agent_loop.  Accept any of these patterns as evidence that
+        # the LLM call path is intact.
         has_chat = ("_chat_with_retry" in content or
                     "_chat" in content or
-                    "chat_completion" in content)
+                    "chat_completion" in content or
+                    "provider.chat" in content or
+                    "_run_agent_loop" in content)
         assert has_chat, \
             "loop.py should still have chat/LLM call method"
 

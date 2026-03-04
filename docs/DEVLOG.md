@@ -123,6 +123,48 @@
 
 ---
 
+## Phase 5: 测例修复 + Token 用量统计 + 文档更新 (2026-03-05)
+
+### 背景
+- 基于实际运行结果（20260304_231418 / 20260304_232825）反馈修复测例问题
+- 给 runner.py 增加 token 用量统计功能（从容器内 analytics.db 查询）
+- 检查 platform/DESIGN.md 文档是否与最新实现一致
+
+### 任务清单
+
+#### 5.1 修复 task-001 SKILL.md 验证失败
+- [x] 5.1.1 runner.py verify_criterion: "存在且包含" 组合规则被通用 "包含" 分支错误匹配，路径解析为 "skills/doubao-search/SKILL.md 存在且" 导致文件找不到
+- [x] 5.1.2 修复方案：将 task-001 特定规则移到通用规则之前；新增通用 "存在且包含" 组合规则处理
+
+#### 5.2 修复 task-002 test_loop_has_chat_method 失败
+- [x] 5.2.1 test_analytics.py: test_loop_has_chat_method 检查 `_chat_with_retry` / `_chat` / `chat_completion`，但原始 loop.py 中不存在这些方法（LLM 调用通过 `self.provider.chat()` 在 `_run_agent_loop` 中完成）
+- [x] 5.2.2 修复方案：新增 `provider.chat` 和 `_run_agent_loop` 作为合法匹配模式
+
+#### 5.3 runner.py 增加 token 用量统计
+- [x] 5.3.1 collect_metrics 从容器内 analytics.db 查询本次运行的 token 消耗（按 session_key 过滤，fallback 到全表汇总）
+- [x] 5.3.2 run_summary.json metrics 中增加 prompt_tokens / completion_tokens / total_tokens 字段
+- [x] 5.3.3 main() 结束时输出 token 用量信息；run.sh 结果展示也增加 token 行
+
+#### 5.4 检查 platform/DESIGN.md 文档准确性
+- [x] 5.4.1 全面重写 DESIGN.md，对齐实际实现：
+  - 执行流程：修正为 runner.py 实际的初始化→注入→收集流程
+  - docker-compose 示例：替换为实际使用的 pre-built image + volume 映射
+  - runner.py 描述：从虚构的 AgentRunner 类改为实际的函数式架构
+  - 目录结构：移除不存在的 eval.py/reporter.py/task_loader.py，补充实际文件
+  - 结果文件：修正为 run_summary.json / eval_result.md / pytest_report.json
+  - Type B 架构图：analytics.py → usage/ 模块
+  - 新增 Token 用量统计章节（analytics.db schema + metrics 输出格式）
+  - 新增验证机制详细说明（声明式规则 + pytest）
+  - 镜像分层：补充 mock 镜像说明
+
+#### 5.5 Git 提交
+- [x] 5.5.1 提交所有改动 — commit `82e5065`
+
+### 完成时间
+- 2026-03-05 00:15
+
+---
+
 ## 🔜 待办
 
 - [ ] 推送至 GitHub 仓库 (`zhangxc11/nanobot-eval-bench`)
