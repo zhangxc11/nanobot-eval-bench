@@ -1,8 +1,5 @@
-# Eval results
-results/
-
-# nanobot source code (synced at runtime, not committed)
-nanobot-src/
+# nanobot source (synced at runtime from real repo, not committed)
+.nanobot-src-staging/
 
 # Environment
 .env
@@ -14,5 +11,8 @@ nanobot-src/
 __pycache__/
 *.pyc
 
-# Nested git repos in task initial_state (pack.sh handles these separately)
-tasks/*/initial_state/project_code/.git/
+# Local data (lives in eval-bench-data/, not in this repo)
+# These are kept here only for backward compatibility if someone puts them here
+results/
+tasks/
+CASE_REGISTRY.md

@@ -109,8 +109,11 @@ export AGENT_MODEL="${AGENT_MODEL:-claude-sonnet-4-20250514}"
 
 # ─── 解析测例路径 ──────────────────────────────────────
 # 优先级: --task-dir > TASK_DIR_HOST env > --task (内置)
+# 测例查找路径: ../eval-bench-data/tasks/ > ./tasks/
+DATA_DIR="${EVAL_BENCH_DATA:-$(dirname "$SCRIPT_DIR")/eval-bench-data}"
+
 if [ -n "$TASK_DIR_HOST" ]; then
-    # 外部测例目录
+    # 外部测例目录（绝对路径）
     if [ ! -d "$TASK_DIR_HOST" ]; then
         echo "❌ 指定的测例目录不存在: $TASK_DIR_HOST"
         exit 1
@@ -124,39 +127,72 @@ if [ -n "$TASK_DIR_HOST" ]; then
     TASK_ID_DISPLAY=$(python3 -c "import yaml; print(yaml.safe_load(open('$TASK_DIR_HOST/task.yaml'))['id'])" 2>/dev/null || basename "$TASK_DIR_HOST")
     TASK_SOURCE="external: $TASK_DIR_HOST"
 else
-    # 内置测例：从 tasks/ 目录查找
-    TASK_DIR_HOST="$SCRIPT_DIR/tasks/$TASK_ID"
-    if [ ! -d "$TASK_DIR_HOST" ]; then
-        echo "❌ 内置测例不存在: $TASK_DIR_HOST"
-        echo "   可用的内置测例:"
-        ls -d "$SCRIPT_DIR"/tasks/*/ 2>/dev/null | while read d; do basename "$d"; done
+    # 内置测例：先查 eval-bench-data/tasks/，再查 ./tasks/
+    if [ -d "$DATA_DIR/tasks/$TASK_ID" ]; then
+        TASK_DIR_HOST="$DATA_DIR/tasks/$TASK_ID"
+        TASK_SOURCE="data: eval-bench-data/tasks/$TASK_ID"
+    elif [ -d "$SCRIPT_DIR/tasks/$TASK_ID" ]; then
+        TASK_DIR_HOST="$SCRIPT_DIR/tasks/$TASK_ID"
+        TASK_SOURCE="built-in: tasks/$TASK_ID"
+    else
+        echo "❌ 测例不存在: $TASK_ID"
+        echo ""
+        echo "   查找路径:"
+        echo "     1. $DATA_DIR/tasks/"
+        echo "     2. $SCRIPT_DIR/tasks/"
+        echo ""
+        echo "   可用的测例:"
+        for d in "$DATA_DIR"/tasks/*/ "$SCRIPT_DIR"/tasks/*/; do
+            [ -d "$d" ] && echo "     $(basename "$d")"
+        done 2>/dev/null
         echo ""
         echo "   或使用 --task-dir 指定外部测例路径"
         exit 1
     fi
     TASK_ID_DISPLAY="$TASK_ID"
-    TASK_SOURCE="built-in: tasks/$TASK_ID"
 fi
 
 export TASK_DIR_HOST
 
 # ─── 准备 nanobot 源码 ────────────────────────────────
-# nanobot-src/ 目录是 agent 镜像构建时 COPY 的源码
-# 每次运行都同步最新源码，确保测试的是指定版本
-NANOBOT_SRC_DIR="$SCRIPT_DIR/nanobot-src"
+# nanobot 源码不日常放在 eval-bench 中，而是运行时自动同步
+# 优先级: --nanobot-src > NANOBOT_SRC_PATH env > 自动检测
+NANOBOT_SRC_DIR="$SCRIPT_DIR/.nanobot-src-staging"
+
+# 默认 nanobot 源码路径（可通过环境变量覆盖）
+DEFAULT_NANOBOT_SRC="${NANOBOT_SRC_PATH:-$(dirname "$SCRIPT_DIR")/../Documents/code/workspace/nanobot}"
 
 if [ -n "$NANOBOT_SRC" ]; then
-    # 用户指定了源码路径
-    if [ ! -d "$NANOBOT_SRC/nanobot" ]; then
-        echo "❌ 指定的路径不是有效的 nanobot 源码目录: $NANOBOT_SRC"
-        echo "   应包含 nanobot/ 子目录（Python 包）"
-        exit 1
-    fi
-    echo "📦 使用指定 nanobot 源码: $NANOBOT_SRC"
-    # 同步源码（只保留核心 Python 包 + pyproject.toml）
-    python3 -c "
+    # 用户通过 --nanobot-src 显式指定
+    RESOLVED_SRC="$NANOBOT_SRC"
+elif [ -d "$DEFAULT_NANOBOT_SRC/nanobot" ]; then
+    # 自动检测到本地 nanobot 仓库
+    RESOLVED_SRC="$DEFAULT_NANOBOT_SRC"
+else
+    echo "❌ 未找到 nanobot 源码"
+    echo ""
+    echo "   方式 1: 指定路径"
+    echo "     ./run.sh --nanobot-src /path/to/nanobot"
+    echo ""
+    echo "   方式 2: 设置环境变量"
+    echo "     export NANOBOT_SRC_PATH=/path/to/nanobot"
+    echo ""
+    echo "   方式 3: 将 nanobot 仓库放在默认位置"
+    echo "     $DEFAULT_NANOBOT_SRC"
+    exit 1
+fi
+
+if [ ! -d "$RESOLVED_SRC/nanobot" ]; then
+    echo "❌ 指定的路径不是有效的 nanobot 源码目录: $RESOLVED_SRC"
+    echo "   应包含 nanobot/ 子目录（Python 包）"
+    exit 1
+fi
+
+echo "📦 Syncing nanobot source from: $RESOLVED_SRC"
+# 同步源码到临时 staging 目录（只保留核心 Python 包 + pyproject.toml）
+python3 -c "
 import shutil, os
-src = '$NANOBOT_SRC'
+src = '$RESOLVED_SRC'
 dst = '$NANOBOT_SRC_DIR'
 if os.path.exists(dst):
     shutil.rmtree(dst)
@@ -167,17 +203,8 @@ ignore = shutil.ignore_patterns(
 )
 shutil.copytree(src, dst, ignore=ignore)
 total = sum(os.path.getsize(os.path.join(dp, fn)) for dp, dn, fns in os.walk(dst) for fn in fns)
-print(f'  Synced {total/1024:.0f} KB')
+print(f'   Synced {total/1024:.0f} KB')
 "
-elif [ -d "$NANOBOT_SRC_DIR/nanobot" ]; then
-    echo "📦 使用已有 nanobot 源码: $NANOBOT_SRC_DIR"
-else
-    echo "❌ 未找到 nanobot 源码"
-    echo "   请使用 --nanobot-src 指定路径，或将源码放在 $NANOBOT_SRC_DIR/"
-    echo ""
-    echo "   示例: ./run.sh --nanobot-src ~/Documents/code/workspace/nanobot"
-    exit 1
-fi
 
 # 显示 nanobot 版本信息
 NANOBOT_VERSION=$(python3 -c "
@@ -188,12 +215,14 @@ except: print('unknown')
 " 2>/dev/null || echo "unknown")
 
 NANOBOT_GIT_INFO=""
-if [ -d "$NANOBOT_SRC/.git" ] && [ -n "$NANOBOT_SRC" ]; then
-    NANOBOT_GIT_INFO=" ($(git -C "$NANOBOT_SRC" rev-parse --short HEAD 2>/dev/null || echo '?') @ $(git -C "$NANOBOT_SRC" branch --show-current 2>/dev/null || echo '?'))"
+if [ -d "$RESOLVED_SRC/.git" ]; then
+    NANOBOT_GIT_INFO=" ($(git -C "$RESOLVED_SRC" rev-parse --short HEAD 2>/dev/null || echo '?') @ $(git -C "$RESOLVED_SRC" branch --show-current 2>/dev/null || echo '?'))"
 fi
 
 # ─── 创建结果目录 ──────────────────────────────────────
-RESULTS_PATH="results/${RUN_ID}"
+# 结果存放在 eval-bench-data/results/（不随框架分发）
+RESULTS_BASE="${EVAL_BENCH_DATA:-$(dirname "$SCRIPT_DIR")/eval-bench-data}/results"
+RESULTS_PATH="${RESULTS_BASE}/${RUN_ID}"
 mkdir -p "$RESULTS_PATH"
 
 echo "╔══════════════════════════════════════════════════════╗"
@@ -219,7 +248,7 @@ cat > "${RESULTS_PATH}/run_config.json" << EOF
   "agent_model": "${AGENT_MODEL}",
   "nanobot_version": "${NANOBOT_VERSION}",
   "nanobot_git": "${NANOBOT_GIT_INFO}",
-  "nanobot_src": "${NANOBOT_SRC:-bundled}",
+  "nanobot_src": "${RESOLVED_SRC}",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF

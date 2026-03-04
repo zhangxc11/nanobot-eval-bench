@@ -4,9 +4,8 @@ FROM eval-bench-base:latest
 LABEL description="nanobot eval-bench: Agent execution environment"
 
 # ─── nanobot 源码（不 pip install，直接放源码）────────
-# 构建时从 context 中 COPY nanobot 源码目录
-# 运行时通过 PYTHONPATH 让 Python 找到它
-COPY nanobot-src/ /opt/nanobot-src/
+# 构建时从 staging 目录 COPY（run.sh 自动从源仓库同步到此）
+COPY .nanobot-src-staging/ /opt/nanobot-src/
 
 # 设置 PYTHONPATH：让 `import nanobot` 能找到源码
 # /opt/nanobot-src/ 下应有 nanobot/ 目录（即 repo 根目录的内容）

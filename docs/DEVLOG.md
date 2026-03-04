@@ -216,7 +216,19 @@
 - [x] 6.8.1 提交所有改动
 
 ### 完成时间
-- 2026-03-05 01:00
+- Phase 6.1~6.7: 2026-03-05 01:00
+- Phase 6.8 (仓库重组): 2026-03-05 01:15
+
+### Phase 6.8 仓库重组
+
+- **Skill 入仓库**: 4 个 Skill 移入 `eval-bench/skills/`，workspace 中通过 symlink 引用
+- **数据分离**: `CASE_REGISTRY.md` + `tasks/` + `results/` 移到并列的 `eval-bench-data/` 目录
+  - eval-bench 是通用框架（可分发），eval-bench-data 是本地数据（不分发）
+- **nanobot 源码机制**: 删除静态 `nanobot-src/`，run.sh 运行时自动从本地仓库同步到 `.nanobot-src-staging/`
+  - 支持 `--nanobot-src` / `NANOBOT_SRC_PATH` / 默认路径自动检测
+  - Dockerfile.agent 从 staging 目录 COPY
+- **测例路径查找**: run.sh 先查 `eval-bench-data/tasks/`，再查 `./tasks/`
+- **结果路径**: 输出到 `eval-bench-data/results/`
 
 ---
 
