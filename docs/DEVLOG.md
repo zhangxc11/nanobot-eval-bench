@@ -165,9 +165,66 @@
 
 ---
 
+## Phase 6: 架构解耦 + Skill 化 + 测例清单统一管理 (2026-03-05)
+
+### 背景
+- 将评测框架与测例解耦，支持外部测例目录
+- 创建 4 个配套 Skill 支撑测例的发现→构造→维护→批量生产流程
+- 将之前 README.md 中的散乱测例清单统一整合到 CASE_REGISTRY.md
+- 扫描 3月2日 15:55 之后的新 session，补充 Batch 2 候选
+
+### 任务清单
+
+#### 6.1 需求文档
+- [x] 6.1.1 REQUIREMENTS_PHASE6.md — 场景分析、解耦方案、4 个 Skill 设计、新增测例清单
+
+#### 6.2 框架解耦
+- [x] 6.2.1 run.sh: 新增 `--task-dir` 参数，支持外部测例路径
+- [x] 6.2.2 docker-compose.yaml: 使用 `TASK_DIR_HOST` 环境变量替代硬编码路径
+- [x] 6.2.3 TASK_SPEC.md: 测例规范文档（目录结构、字段说明、验证规则、分类列表）
+- [x] 6.2.4 CASE_REGISTRY.md: 统一测例清单
+  - 整合 Batch 1 (A1~A16 + B1~B21 + C1~C16) 共 53 个候选
+  - 新增 Batch 2 (N1~N15) 共 15 个候选
+  - 状态标记体系（📋候选/🔨构造中/✅已构造/❌放弃/🔄需更新）
+  - 构造记录关联机制
+  - 整体运转流程说明
+- [x] 6.2.5 验证已有 task-001, task-002 兼容性（task.yaml 解析正常）
+
+#### 6.3 Skill 1 — eval-session-scanner
+- [x] 6.3.1 SKILL.md（含体系运转逻辑、4 Skill 协同流程图、组织级部署场景）
+- [x] 6.3.2 scripts/scan_sessions.py（session 扫描脚本）
+  - 支持 --since / --since-last-batch 时间范围
+  - 支持 --format json/markdown 输出格式
+  - 支持 --registry 去重 + 读取上次 Batch 时间
+  - 自动排除过短 session
+- [x] 6.3.3 对 3月2日 15:55 之后的 session 实际运行验证（17 个 session 命中）
+- [x] 6.3.4 扫描结果保存为 docs/scan_batch2_raw.md
+
+#### 6.4 Skill 2 — eval-task-builder
+- [x] 6.4.1 SKILL.md（构造流程、敏感信息处理、框架改进反馈机制）
+
+#### 6.5 Skill 3 — eval-framework-maintainer
+- [x] 6.5.1 SKILL.md（工作流程、兼容性检查）
+
+#### 6.6 Skill 4 — eval-task-batch-builder
+- [x] 6.6.1 SKILL.md（子智能体编排、汇总报告格式）
+
+#### 6.7 文档更新
+- [x] 6.7.1 README.md: 精简为项目概览 + 指向 CASE_REGISTRY.md + 4 Skill 说明
+
+#### 6.8 Git 提交
+- [x] 6.8.1 提交所有改动
+
+### 完成时间
+- 2026-03-05 01:00
+
+---
+
 ## 🔜 待办
 
 - [ ] 推送至 GitHub 仓库 (`zhangxc11/nanobot-eval-bench`)
-- [ ] 新增更多评测任务（从 A2~A16 / B 类中选取）
+- [ ] Skill 2 脚本实现 + 实际构造 1 个 A 类测例验证
+- [ ] Skill 3 兼容性检查脚本实现
+- [ ] Skill 4 子智能体编排实现
+- [ ] 批量构造 A 类测例
 - [ ] 实际端到端运行验证（Docker 环境）
-- [ ] 报告生成器 (reporter.py)
