@@ -1,3 +1,8 @@
+---
+name: eval-task-builder
+description: eval-bench 测例构造。根据 CASE_REGISTRY.md 中的候选描述，构造符合 eval-bench 框架规范的完整测例目录。
+---
+
 # eval-task-builder — 测例构造
 
 根据 CASE_REGISTRY.md 中的候选描述，构造符合 eval-bench 框架规范的完整测例目录。

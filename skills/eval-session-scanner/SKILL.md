@@ -1,3 +1,8 @@
+---
+name: eval-session-scanner
+description: eval-bench 测例清单提炼。从 nanobot session 历史中扫描、识别、整理可提炼为评测测例的独立任务。
+---
+
 # eval-session-scanner — 测例清单提炼
 
 从 nanobot session 历史中扫描、识别、整理可提炼为评测测例的独立任务。

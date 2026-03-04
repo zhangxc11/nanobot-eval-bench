@@ -1,3 +1,8 @@
+---
+name: eval-task-batch-builder
+description: eval-bench 批量测例构造。利用子智能体（spawn），根据 CASE_REGISTRY.md 中的候选清单批量构造多个测例。
+---
+
 # eval-task-batch-builder — 批量测例构造
 
 利用子智能体（spawn），根据 CASE_REGISTRY.md 中的候选清单批量构造多个测例。

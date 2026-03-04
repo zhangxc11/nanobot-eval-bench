@@ -1,3 +1,8 @@
+---
+name: eval-framework-maintainer
+description: eval-bench 评测框架维护。根据测例构造过程中产生的框架改进需求，修改评测框架代码，并确保已有测例兼容。
+---
+
 # eval-framework-maintainer — 评测框架维护
 
 根据测例构造过程中产生的框架改进需求，修改评测框架代码，并确保已有测例兼容。
