@@ -10,6 +10,8 @@
 #   ./run.sh                                    # 使用默认 nanobot 源码
 #   ./run.sh --nanobot-src /path/to/nanobot     # 指定 nanobot 源码路径
 #   ./run.sh --model gpt-4o --provider openai   # 指定模型
+#   ./run.sh --task task-001                    # 内置测例（从 tasks/ 查找）
+#   ./run.sh --task-dir /path/to/my-task        # 外部测例目录
 #   ./run.sh --rebuild-base                     # 强制重建基础镜像
 #
 # 环境变量:
@@ -17,7 +19,8 @@
 #   AGENT_PROVIDER    (可选) LLM Provider，默认 anthropic
 #   AGENT_MODEL       (可选) 模型名，默认 claude-sonnet-4-20250514
 #   AGENT_API_BASE    (可选) 自定义 API Base URL
-#   TASK_ID           (可选) 任务 ID，默认 task-001-doubao-search-skill
+#   TASK_ID           (可选) 内置任务 ID，默认 task-001-doubao-search-skill
+#   TASK_DIR_HOST     (可选) 外部测例目录的宿主机绝对路径（优先于 TASK_ID）
 #   RUN_ID            (可选) 运行 ID，默认时间戳
 
 set -e
@@ -36,6 +39,7 @@ fi
 # ─── 默认值 ────────────────────────────────────────────
 NANOBOT_SRC=""
 REBUILD_BASE=false
+TASK_DIR_HOST=""
 
 # ─── 解析命令行参数 ────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -45,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         --key)           export AGENT_API_KEY="$2"; shift 2 ;;
         --base-url)      export AGENT_API_BASE="$2"; shift 2 ;;
         --task)          export TASK_ID="$2"; shift 2 ;;
+        --task-dir)      TASK_DIR_HOST="$(cd "$2" 2>/dev/null && pwd || echo "$2")"; shift 2 ;;
         --run-id)        export RUN_ID="$2"; shift 2 ;;
         --nanobot-src)   NANOBOT_SRC="$2"; shift 2 ;;
         --rebuild-base)  REBUILD_BASE=true; shift ;;
@@ -56,21 +61,24 @@ while [[ $# -gt 0 ]]; do
             echo "  --model NAME          Model name (default: claude-sonnet-4-20250514)"
             echo "  --key KEY             API key (or set AGENT_API_KEY env var)"
             echo "  --base-url URL        Custom API base URL"
-            echo "  --task ID             Task ID (default: task-001-doubao-search-skill)"
+            echo "  --task ID             Built-in task ID (from tasks/ directory)"
+            echo "  --task-dir PATH       External task directory (absolute or relative path)"
             echo "  --run-id ID           Run ID for results directory (default: timestamp)"
             echo "  --nanobot-src PATH    Path to nanobot source repo (default: bundled)"
             echo "  --rebuild-base        Force rebuild base image (deps changed)"
             echo ""
             echo "Examples:"
-            echo "  # 测试不同 LLM"
+            echo "  # Run built-in task"
+            echo "  ./run.sh --task task-001-doubao-search-skill"
+            echo ""
+            echo "  # Run external task"
+            echo "  ./run.sh --task-dir ~/eval-tasks/my-custom-task"
+            echo ""
+            echo "  # Test different LLM"
             echo "  ./run.sh --key sk-xxx --provider openai --model gpt-4o"
             echo ""
-            echo "  # 测试不同版本的 nanobot 代码"
+            echo "  # Test different nanobot version"
             echo "  ./run.sh --key sk-xxx --nanobot-src ~/code/nanobot-experimental"
-            echo ""
-            echo "  # 测试特定分支"
-            echo "  git -C nanobot-src checkout feat/new-tool-strategy"
-            echo "  ./run.sh --key sk-xxx"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -98,6 +106,39 @@ export TASK_ID="${TASK_ID:-task-001-doubao-search-skill}"
 export RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-anthropic}"
 export AGENT_MODEL="${AGENT_MODEL:-claude-sonnet-4-20250514}"
+
+# ─── 解析测例路径 ──────────────────────────────────────
+# 优先级: --task-dir > TASK_DIR_HOST env > --task (内置)
+if [ -n "$TASK_DIR_HOST" ]; then
+    # 外部测例目录
+    if [ ! -d "$TASK_DIR_HOST" ]; then
+        echo "❌ 指定的测例目录不存在: $TASK_DIR_HOST"
+        exit 1
+    fi
+    if [ ! -f "$TASK_DIR_HOST/task.yaml" ]; then
+        echo "❌ 测例目录中未找到 task.yaml: $TASK_DIR_HOST/"
+        echo "   请确保目录包含 task.yaml（参考 docs/TASK_SPEC.md）"
+        exit 1
+    fi
+    # Extract TASK_ID from task.yaml for display
+    TASK_ID_DISPLAY=$(python3 -c "import yaml; print(yaml.safe_load(open('$TASK_DIR_HOST/task.yaml'))['id'])" 2>/dev/null || basename "$TASK_DIR_HOST")
+    TASK_SOURCE="external: $TASK_DIR_HOST"
+else
+    # 内置测例：从 tasks/ 目录查找
+    TASK_DIR_HOST="$SCRIPT_DIR/tasks/$TASK_ID"
+    if [ ! -d "$TASK_DIR_HOST" ]; then
+        echo "❌ 内置测例不存在: $TASK_DIR_HOST"
+        echo "   可用的内置测例:"
+        ls -d "$SCRIPT_DIR"/tasks/*/ 2>/dev/null | while read d; do basename "$d"; done
+        echo ""
+        echo "   或使用 --task-dir 指定外部测例路径"
+        exit 1
+    fi
+    TASK_ID_DISPLAY="$TASK_ID"
+    TASK_SOURCE="built-in: tasks/$TASK_ID"
+fi
+
+export TASK_DIR_HOST
 
 # ─── 准备 nanobot 源码 ────────────────────────────────
 # nanobot-src/ 目录是 agent 镜像构建时 COPY 的源码
@@ -158,7 +199,8 @@ mkdir -p "$RESULTS_PATH"
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║          nanobot Eval Bench — Task Runner            ║"
 echo "╠══════════════════════════════════════════════════════╣"
-echo "║  Task:       ${TASK_ID}"
+echo "║  Task:       ${TASK_ID_DISPLAY}"
+echo "║  Source:     ${TASK_SOURCE}"
 echo "║  Run ID:     ${RUN_ID}"
 echo "║  Provider:   ${AGENT_PROVIDER}"
 echo "║  Model:      ${AGENT_MODEL}"
@@ -170,7 +212,8 @@ echo ""
 # 保存运行配置到结果目录
 cat > "${RESULTS_PATH}/run_config.json" << EOF
 {
-  "task_id": "${TASK_ID}",
+  "task_id": "${TASK_ID_DISPLAY}",
+  "task_source": "${TASK_SOURCE}",
   "run_id": "${RUN_ID}",
   "agent_provider": "${AGENT_PROVIDER}",
   "agent_model": "${AGENT_MODEL}",

@@ -3,7 +3,7 @@ services:
   mock-api:
     image: eval-bench-mock:latest
     volumes:
-      - ../tasks/${TASK_ID:-task-001-doubao-search-skill}/mocks:/mocks:ro
+      - ${TASK_DIR_HOST:-../tasks/task-001-doubao-search-skill}/mocks:/mocks:ro
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:18080/health')"]
       interval: 3s
@@ -17,8 +17,8 @@ services:
       mock-api:
         condition: service_healthy
     volumes:
-      # 任务定义（只读）
-      - ../tasks/${TASK_ID:-task-001-doubao-search-skill}:/eval/task:ro
+      # 任务定义（只读）— 支持内置或外部测例目录
+      - ${TASK_DIR_HOST:-../tasks/task-001-doubao-search-skill}:/eval/task:ro
       # 结果输出
       - ../results/${RUN_ID:-latest}:/eval/results
     environment:
