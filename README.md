@@ -10,7 +10,7 @@
 # 1. 设置 API Key
 export AGENT_API_KEY=sk-your-api-key
 
-# 2. 运行测例（从 eval-bench-data/tasks/ 查找）
+# 2. 运行单个测例（从 eval-bench-data/tasks/ 查找）
 ./run.sh --task task-001-doubao-search-skill
 
 # 3. 运行外部测例
@@ -21,6 +21,15 @@ export AGENT_API_KEY=sk-your-api-key
 
 # 5. 指定不同模型
 ./run.sh --provider volcengine --model ep-xxx --base-url https://ark.cn-beijing.volces.com/api/v3
+
+# 6. Dry-run 模式（跳过 agent 执行，仅验证测例配置和 verify_script）
+./run.sh --task task-001 --dry-run
+
+# 7. 批量运行多个测例
+./batch_run.sh task-001 task-002 task-003
+./batch_run.sh --all                          # 运行所有测例
+./batch_run.sh --glob "task-01*" --dry-run    # glob 匹配 + dry-run
+./batch_run.sh --all --continue               # 断点续跑（跳过已有结果的）
 ```
 
 ## 项目结构
@@ -28,7 +37,8 @@ export AGENT_API_KEY=sk-your-api-key
 ```
 eval-bench/                        # 框架仓库（Git 管理，可分发）
 ├── README.md                      # 本文件
-├── run.sh                         # 一键运行脚本
+├── run.sh                         # 单测例运行脚本
+├── batch_run.sh                   # 批量运行脚本（支持 glob/--all/--continue）
 ├── pack.sh                        # 打包分发脚本
 ├── .env.example                   # 环境变量模板
 ├── skills/                        # 📋 配套 Skill（随框架分发）
@@ -118,6 +128,51 @@ git -C ~/code/nanobot checkout main
 git -C ~/code/nanobot checkout feat/new-tool-strategy
 ./run.sh --task task-001
 ```
+
+## Dry-Run 模式
+
+跳过 agent 执行，仅验证测例配置（task.yaml、initial_state、verify_script）是否正确：
+
+```bash
+# 单测例 dry-run
+./run.sh --task task-001 --dry-run
+
+# 批量 dry-run（快速验证所有测例）
+./batch_run.sh --all --dry-run
+```
+
+Dry-run 模式下：
+- ✅ 正常加载 task.yaml 和 query.md
+- ✅ 正常初始化 workspace（复制 initial_state）
+- ⏭️ **跳过** agent turns（不调用 LLM，不需要 API Key）
+- ✅ 正常执行 pytest verification
+- ✅ 正常输出 run_summary.json（含 `"dry_run": true` 标记）
+
+## 批量运行
+
+`batch_run.sh` 支持一次运行多个测例，自动收集结果并输出汇总：
+
+```bash
+# 指定测例 ID 列表
+./batch_run.sh task-001 task-002 task-003
+
+# glob 模式匹配（可多次使用）
+./batch_run.sh --glob "task-01*" --glob "task-02*"
+
+# 运行所有测例
+./batch_run.sh --all
+
+# 指定结果输出目录
+./batch_run.sh --all --results-dir ./my-results
+
+# 断点续跑（跳过已有 run_summary.json 的测例）
+./batch_run.sh --all --continue --results-dir ./my-results
+```
+
+运行完成后输出：
+- 每个测例的结果存到 `{results_dir}/{task_id}/`
+- 格式化汇总表格（task_id, pass/fail, verification 通过率）
+- `batch_summary.json` 汇总文件
 
 ## 文档
 
