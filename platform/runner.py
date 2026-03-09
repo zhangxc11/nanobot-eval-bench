@@ -396,6 +396,10 @@ def _run_pytest(script_path: Path, task: dict) -> dict:
     - EVAL_HOME: /eval
     - WORKSPACE: /eval/.nanobot/workspace
     - TASK_DIR: /eval/task
+    - RESULTS_DIR: /eval/results
+    - NANOBOT_HOME: /eval/.nanobot
+    - TASK_ID: task id from task.yaml (e.g. "task-001")
+    - TASK_NAME: task name from task.yaml
     - PROJECT_DIR: project code directory (if code_modification task)
     """
     results = {}
