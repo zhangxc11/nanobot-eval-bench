@@ -40,6 +40,7 @@ fi
 NANOBOT_SRC=""
 REBUILD_BASE=false
 TASK_DIR_HOST=""
+DRY_RUN=""
 
 # ─── 解析命令行参数 ────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
         --run-id)        export RUN_ID="$2"; shift 2 ;;
         --nanobot-src)   NANOBOT_SRC="$2"; shift 2 ;;
         --rebuild-base)  REBUILD_BASE=true; shift ;;
+        --dry-run)       DRY_RUN=1; shift ;;
         --help|-h)
             echo "Usage: ./run.sh [OPTIONS]"
             echo ""
@@ -66,6 +68,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --run-id ID           Run ID for results directory (default: timestamp)"
             echo "  --nanobot-src PATH    Path to nanobot source repo (default: bundled)"
             echo "  --rebuild-base        Force rebuild base image (deps changed)"
+            echo "  --dry-run             Skip agent execution, only verify task setup"
             echo ""
             echo "Examples:"
             echo "  # Run built-in task"
@@ -86,13 +89,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── 检查必要条件 ──────────────────────────────────────
-if [ -z "$AGENT_API_KEY" ]; then
+if [ -z "$DRY_RUN" ] && [ -z "$AGENT_API_KEY" ]; then
     echo "❌ 请设置 AGENT_API_KEY 环境变量"
     echo ""
     echo "  export AGENT_API_KEY=sk-your-api-key"
     echo "  ./run.sh"
     echo ""
     echo "  或: ./run.sh --key sk-your-api-key"
+    echo "  或: ./run.sh --dry-run  (跳过 agent 执行)"
     exit 1
 fi
 
@@ -294,6 +298,10 @@ echo ""
 
 # ─── Step 4: 运行评测 ─────────────────────────────────
 echo "🚀 Starting evaluation..."
+if [ -n "$DRY_RUN" ]; then
+    echo "   (dry-run mode: agent turns will be skipped)"
+fi
+export DRY_RUN
 echo ""
 
 docker compose -p "eval-${RUN_ID}" -f platform/docker-compose.yaml up \

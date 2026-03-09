@@ -377,3 +377,76 @@
 - [ ] Skill 4 子智能体编排实现
 - [ ] 批量构造 A 类测例
 - [ ] 实际端到端运行验证（Docker 环境）
+
+---
+
+## Phase 9: P3 功能增强 — SESSION_ID 动态化 + dry-run + 批量运行 (2026-03-09)
+
+### 背景
+- 0307 批量评测反馈的 P3 功能增强项
+- SESSION_ID 硬编码导致 analytics.db token 统计无法按 task 区分
+- 缺少快速验证测例配置的方式（每次都要跑完整 agent）
+- 缺少批量运行多个测例的入口脚本
+
+### 任务清单
+
+#### 9.1 P3-1: SESSION_ID 动态化
+- [x] 9.1.1 runner.py: SESSION_ID 从硬编码 `"eval:task-001"` 改为 `f"eval:{task_id}"`
+  - 保留模块级默认值（兼容 collect_metrics 中的引用）
+  - 在 main() 中加载 task.yaml 后通过 `global SESSION_ID` 重新赋值
+  - main() 中新增 Session ID 日志输出
+
+#### 9.2 P3-5: `--dry-run` 模式
+- [x] 9.2.1 runner.py: 新增 `_parse_args()` 函数，支持 `--dry-run` 命令行参数和 `DRY_RUN=1` 环境变量
+- [x] 9.2.2 runner.py: main() 中 dry-run 模式下：
+  - 跳过 AGENT_API_KEY 检查
+  - 正常加载 task.yaml 和 query.md
+  - 正常初始化 workspace（复制 initial_state）
+  - 跳过 agent turns（填充 `[DRY-RUN: agent execution skipped]` 占位）
+  - 正常执行 verification（跑 pytest）
+  - 正常收集 metrics 和输出 run_summary.json
+  - run_summary.json 中新增 `dry_run` 字段
+- [x] 9.2.3 run.sh: 新增 `--dry-run` 参数，传递 DRY_RUN 环境变量给 docker compose
+- [x] 9.2.4 docker-compose.yaml: agent-runner 环境变量新增 `DRY_RUN=${DRY_RUN:-}`
+
+#### 9.3 P3-6: 批量运行入口 `batch_run.sh`
+- [x] 9.3.1 `batch_run.sh`（仓库根目录），支持：
+  - 参数方式：task ID 列表、`--glob PATTERN`、`--all`
+  - `--results-dir` 指定结果根目录（默认 `eval-bench-data/results/batch_<timestamp>`）
+  - `--dry-run` 传递给 runner.py
+  - `--continue` 断点续跑（跳过已有 run_summary.json 的测例）
+  - 首个测例运行前自动构建/同步 Docker 镜像
+  - 每个测例独立 docker compose project（`eval-batch-*`），运行后自动清理
+  - 结果存到 `{results_dir}/{task_id}/`
+  - 运行完成后输出汇总表格（task_id, status, verification, time）
+  - 保存 `batch_summary.json` 到结果根目录
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `platform/runner.py` | P3-1 (SESSION_ID 动态化), P3-5 (_parse_args + dry-run 逻辑) |
+| `platform/docker-compose.yaml` | P3-5 (DRY_RUN 环境变量) |
+| `run.sh` | P3-5 (--dry-run 参数 + export DRY_RUN) |
+| `batch_run.sh` | P3-6 (新建，批量运行入口) |
+
+### 设计决策
+
+**P3-1: 为什么用 global 而非函数参数？**
+- SESSION_ID 被 `collect_metrics()` 引用来查询 analytics.db
+- 改为函数参数需要修改多个函数签名，改动面大
+- 使用 `global SESSION_ID` 在 main() 中赋值，最小改动，且模块级默认值保留兼容性
+
+**P3-5: 为什么 dry-run 仍执行 verification？**
+- dry-run 的核心用途是验证测例配置是否正确（task.yaml、initial_state、verify_script）
+- 如果跳过 verification，就无法发现 verify_script 本身的问题
+- agent 未执行时 verification 大概率会 FAIL，但这正是预期行为——确认 verify_script 能正常运行
+
+**P3-6: batch_run.sh vs 循环调用 run.sh？**
+- 直接循环调用 run.sh 会每次重建镜像、重新同步源码，浪费时间
+- batch_run.sh 只在首个测例前构建一次镜像，后续测例直接运行
+- 独立 docker compose project name 避免并行冲突
+- `--continue` 模式支持断点续跑，适合大批量运行
+
+### 完成时间
+- 2026-03-09 16:25

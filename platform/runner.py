@@ -67,7 +67,7 @@ NANOBOT_HOME = EVAL_HOME / ".nanobot"
 WORKSPACE = NANOBOT_HOME / "workspace"
 RESULTS_DIR = Path(os.environ.get("RESULTS_DIR", "/eval/results"))
 TASK_DIR = Path(os.environ.get("TASK_DIR", "/eval/task"))
-SESSION_ID = "eval:task-001"
+SESSION_ID = "eval:task-001"  # Default; overridden in main() from task.yaml
 
 # Agent LLM config
 AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "anthropic")
@@ -568,15 +568,39 @@ def collect_metrics(start_time: float, task: dict) -> RunMetrics:
     return metrics
 
 
+def _parse_args() -> bool:
+    """Parse command-line arguments. Returns True if dry-run mode is enabled.
+
+    Supports both --dry-run flag and DRY_RUN=1 environment variable.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="nanobot Eval Bench Task Runner")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=os.environ.get("DRY_RUN", "").strip() in ("1", "true", "yes"),
+        help="Skip agent turns, only verify task setup and run tests",
+    )
+    args = parser.parse_args()
+    return args.dry_run
+
+
 async def main():
+    global SESSION_ID
+
     start_time = time.time()
+
+    # Parse command-line arguments
+    dry_run = _parse_args()
 
     print("=" * 60, file=sys.stderr)
     print("  nanobot Eval Bench - Task Runner", file=sys.stderr)
+    if dry_run:
+        print("  *** DRY-RUN MODE — agent turns will be skipped ***", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
-    # Validate required env vars
-    if not AGENT_API_KEY:
+    # Validate required env vars (skip API key check in dry-run mode)
+    if not dry_run and not AGENT_API_KEY:
         print("[runner] ERROR: AGENT_API_KEY not set!", file=sys.stderr)
         sys.exit(1)
 
@@ -589,8 +613,13 @@ async def main():
     task = yaml.safe_load(task_yaml.read_text())
     task_id = task["id"]
     task_type = task.get("type", "general")
+
+    # P3-1: Dynamic SESSION_ID from task_id
+    SESSION_ID = f"eval:{task_id}"
+
     print(f"[runner] Task: {task_id} - {task['name']}", file=sys.stderr)
     print(f"[runner] Type: {task_type}", file=sys.stderr)
+    print(f"[runner] Session ID: {SESSION_ID}", file=sys.stderr)
 
     # 1. Initialize environment
     setup_nanobot_home(task)
@@ -599,25 +628,36 @@ async def main():
     turns = load_queries()
     print(f"[runner] Loaded {len(turns)} query turns", file=sys.stderr)
 
-    # 3. Execute multi-turn conversation
+    # 3. Execute multi-turn conversation (skipped in dry-run mode)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     responses = []
 
-    for i, turn in enumerate(turns):
-        print(f"\n{'_'*40}", file=sys.stderr)
-        print(f"[runner] Turn {i+1}/{len(turns)}: {turn['label']}", file=sys.stderr)
-        print(f"{'_'*40}", file=sys.stderr)
+    if dry_run:
+        print(f"\n[runner] DRY-RUN: Skipping {len(turns)} agent turn(s)", file=sys.stderr)
+        for i, turn in enumerate(turns):
+            responses.append({
+                "turn": i + 1,
+                "label": turn["label"],
+                "user": turn["content"],
+                "agent": "[DRY-RUN: agent execution skipped]",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+    else:
+        for i, turn in enumerate(turns):
+            print(f"\n{'_'*40}", file=sys.stderr)
+            print(f"[runner] Turn {i+1}/{len(turns)}: {turn['label']}", file=sys.stderr)
+            print(f"{'_'*40}", file=sys.stderr)
 
-        response = await run_agent_turn(turn["content"], SESSION_ID)
-        responses.append({
-            "turn": i + 1,
-            "label": turn["label"],
-            "user": turn["content"],
-            "agent": response,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        })
+            response = await run_agent_turn(turn["content"], SESSION_ID)
+            responses.append({
+                "turn": i + 1,
+                "label": turn["label"],
+                "user": turn["content"],
+                "agent": response,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            })
 
-        await asyncio.sleep(1)
+            await asyncio.sleep(1)
 
     # Save conversation summary
     (RESULTS_DIR / "turns.json").write_text(
@@ -652,6 +692,7 @@ async def main():
         "task_id": task_id,
         "task_name": task["name"],
         "task_type": task_type,
+        "dry_run": dry_run,
         "success": all(v["passed"] for v in test_results.values()) if test_results else False,
         "verification": {"passed": passed, "total": total},
         "test_results": test_results,

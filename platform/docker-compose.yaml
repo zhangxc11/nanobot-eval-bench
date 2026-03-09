@@ -34,3 +34,4 @@ services:
       - TASK_DIR=/eval/task
       - RESULTS_DIR=/eval/results
       - HOME=/eval
+      - DRY_RUN=${DRY_RUN:-}
