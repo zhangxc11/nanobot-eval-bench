@@ -222,7 +222,7 @@ fi
 # ─── 创建结果目录 ──────────────────────────────────────
 # 结果存放在 eval-bench-data/results/（不随框架分发）
 RESULTS_BASE="${EVAL_BENCH_DATA:-$(dirname "$SCRIPT_DIR")/eval-bench-data}/results"
-RESULTS_PATH="${RESULTS_BASE}/${RUN_ID}"
+export RESULTS_PATH="${RESULTS_BASE}/${RUN_ID}"
 mkdir -p "$RESULTS_PATH"
 
 echo "╔══════════════════════════════════════════════════════╗"
@@ -263,6 +263,7 @@ if [ -z "$BASE_EXISTS" ] || [ "$REBUILD_BASE" = true ]; then
         -f platform/Dockerfile.base \
         --build-arg REGISTRY_MIRROR="${DOCKER_MIRROR:-}" \
         --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+        --build-arg APT_MIRROR="${APT_MIRROR:-}" \
         . \
         2>&1 | tail -20
     echo "✅ Base image built: $BASE_IMAGE"
@@ -295,7 +296,7 @@ echo ""
 echo "🚀 Starting evaluation..."
 echo ""
 
-docker compose -f platform/docker-compose.yaml up \
+docker compose -p "eval-${RUN_ID}" -f platform/docker-compose.yaml up \
     --no-build \
     --abort-on-container-exit \
     --exit-code-from agent-runner \
@@ -306,7 +307,7 @@ EXIT_CODE=${PIPESTATUS[0]}
 echo ""
 
 # 清理容器
-docker compose -f platform/docker-compose.yaml down --volumes 2>/dev/null
+docker compose -p "eval-${RUN_ID}" -f platform/docker-compose.yaml down --volumes 2>/dev/null
 
 # ─── 显示结果 ──────────────────────────────────────────
 if [ -f "${RESULTS_PATH}/run_summary.json" ]; then

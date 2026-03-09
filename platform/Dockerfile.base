@@ -6,9 +6,15 @@ LABEL version="1.1"
 
 # ─── Build args for mirror support ──────────────────────
 ARG PIP_INDEX_URL=""
+ARG APT_MIRROR=""
 
 # ─── 系统依赖 ───────────────────────────────────────────
 # lxml 需要 libxml2, Pillow 需要 libjpeg, git 用于 nanobot 内部操作
+# 可选: 替换 apt 源为国内镜像
+RUN if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+        sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true; \
+    fi
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl jq tree \
     libxml2-dev libxslt1-dev \

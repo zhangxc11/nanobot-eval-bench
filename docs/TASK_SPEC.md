@@ -16,7 +16,8 @@ task-{id}-{slug}/
 ├── verify/            # 可选 — pytest 验证脚本
 │   └── test_xxx.py
 ├── mocks/             # 可选 — Mock 服务脚本
-│   └── xxx_mock.py
+│   ├── start.sh       #   必须 — 统一启动入口（框架执行 bash /mocks/start.sh）
+│   └── xxx_mock.py    #   Mock 服务实现
 ├── eval_prompt.md     # 可选 — 评价 prompt（供智能体评分用）
 └── reference/         # 可选 — 参考答案
 ```
@@ -179,9 +180,32 @@ pytest 脚本通过环境变量获取路径：
 
 ## Mock 服务
 
+### 启动入口约定
+
+每个测例的 `mocks/` 目录**必须**提供 `start.sh` 作为统一启动入口。
+框架通过 `bash /mocks/start.sh` 启动 mock 容器，不做任何自动检测。
+
+**`start.sh` 示例**（最常见的单脚本场景）：
+```bash
+#!/bin/bash
+# Mock 服务启动脚本
+exec python3 /mocks/minimal_mock.py
+```
+
+**高级场景**（多进程、环境初始化等）：
+```bash
+#!/bin/bash
+# 设置环境变量
+export MOCK_PORT=18080
+export DATA_DIR=/mocks/fixtures
+
+# 启动 mock 服务
+exec python3 /mocks/my_custom_mock.py
+```
+
 ### mock 脚本规范
 
-mock 脚本放在 `mocks/` 目录下，容器启动时通过 `python3 /mocks/<script>.py` 运行。
+mock 脚本放在 `mocks/` 目录下，由 `start.sh` 负责启动。
 
 **要求**：
 - 监听 `0.0.0.0:18080`
@@ -194,10 +218,10 @@ mock 脚本放在 `mocks/` 目录下，容器启动时通过 `python3 /mocks/<sc
 
 ### 无 Mock 的任务
 
-如果任务不需要 Mock API，仍需提供一个空的 `mocks/` 目录或最小 mock 脚本
-（docker-compose 会挂载该目录）。
+如果任务不需要 Mock API，仍需提供 `mocks/` 目录，包含最小 mock 脚本 + `start.sh`
+（docker-compose 会挂载该目录，容器依赖 health check 通过才启动 agent）。
 
-最小 mock 脚本：
+最小 mock 脚本（`minimal_mock.py`）：
 ```python
 #!/usr/bin/env python3
 """Minimal mock server — no external API needed for this task."""
@@ -213,6 +237,12 @@ class Handler(BaseHTTPRequestHandler):
 HTTPServer(("0.0.0.0", 18080), Handler).serve_forever()
 ```
 
+对应的 `start.sh`：
+```bash
+#!/bin/bash
+exec python3 /mocks/minimal_mock.py
+```
+
 ## 示例
 
 ### 最简测例（Type A，单轮，声明式验证）
@@ -222,6 +252,7 @@ task-simple-example/
 ├── task.yaml
 ├── query.md
 └── mocks/
+    ├── start.sh
     └── minimal_mock.py
 ```
 

@@ -232,6 +232,81 @@
 
 ---
 
+## Phase 7: 0307 批量评测反馈 — P0/P1 框架修复 (2026-03-09)
+
+### 背景
+- 0307 批量评测（36 测例）暴露了多个框架级问题，详见 `eval-bench-0307-results/FEEDBACK.md`
+- FEEDBACK.md 按优先级分为 P0（首次运行必踩）、P1（国内用户必踩）、P2（功能增强）
+- 本 Phase 修复全部 P0 + 部分 P1 问题
+
+### 问题来源对照
+
+| FEEDBACK# | 严重度 | 问题 | 本次修复 |
+|-----------|--------|------|---------|
+| 2.2 | P0 | Dockerfile.mock CMD 硬编码 `volcengine_mock.py` | ✅ P0-1 |
+| 2.1 | P0 | docker-compose.yaml results volume 路径不匹配 | ✅ P0-2 |
+| 2.4 | P0→P2 升级 | docker compose project name 未隔离 | ✅ P0-3 |
+| 1.5 | P1 | .env.example 国内配置提示不醒目 | ✅ P1-1 |
+| 1.3 | P1 | Dockerfile.base apt 源无 build-arg 支持 | ✅ P1-2 |
+| 1.1 | P0 | run.sh 不自动加载 .env | Phase 5 已修（3.7.1） |
+| 1.2 | P1 | Docker 镜像前缀 build-arg | Phase 3 已修（3.1.4） |
+| 1.4 | P1 | nanobot 从 GitHub 安装超时 | Phase 6 已修（本地源码同步） |
+| 2.3 | P2 | runner.py 否定断言支持 | 🔜 待做 |
+| 2.5 | P2 | docker-compose.yaml env_file 路径 | 🔜 待做 |
+
+### 任务清单
+
+#### 7.1 P0-1: Dockerfile.mock CMD 通用化 — 约定 `start.sh` 入口
+- [x] 7.1.1 `platform/Dockerfile.mock`: CMD 从 `["python3", "volcengine_mock.py"]` 改为 `["bash", "/mocks/start.sh"]`
+  - 约定：各测例的 `mocks/` 目录必须提供 `start.sh` 作为统一启动入口
+  - 比自动检测 .py 文件更严谨、更可控，测例可在 start.sh 中做任意初始化
+- [x] 7.1.2 `platform/docker-compose.yaml`: 移除不再需要的 `MOCK_ENTRY` 环境变量
+- [x] 7.1.3 `eval-bench-data/tasks/`: 为全部 37 个测例生成 `mocks/start.sh`
+  - task-001, task-002: `exec python3 /mocks/volcengine_mock.py`
+  - task-034: `exec python3 /mocks/api_gateway_mock.py`
+  - 其余 34 个: `exec python3 /mocks/minimal_mock.py`
+
+#### 7.2 P0-2: results volume 路径统一
+- [x] 7.2.1 `platform/docker-compose.yaml`: results volume 从 `../results/${RUN_ID:-latest}` 改为 `${RESULTS_PATH:-../results/latest}`
+- [x] 7.2.2 `run.sh`: RESULTS_PATH 变量添加 `export`，确保 docker compose 能读到
+
+#### 7.3 P0-3: docker compose project name 隔离
+- [x] 7.3.1 `run.sh`: `docker compose up` 添加 `-p "eval-${RUN_ID}"`
+- [x] 7.3.2 `run.sh`: `docker compose down` 添加 `-p "eval-${RUN_ID}"`
+- 并行运行多测例时容器互不干扰
+
+#### 7.4 P1-1: .env.example 国内配置醒目提示
+- [x] 7.4.1 `.env.example`: 国内镜像区域标题从 `[可选] 国内镜像加速` 改为 `⚠️ 国内用户必读：以下配置不设置会导致构建超时失败！`
+- [x] 7.4.2 补充 Docker Hub 镜像、pip 镜像源、API 代理三项说明
+
+#### 7.5 P1-2: Dockerfile.base apt 源 build-arg 支持
+- [x] 7.5.1 `platform/Dockerfile.base`: 新增 `ARG APT_MIRROR=""`，在 `apt-get update` 前条件替换 apt 源
+- [x] 7.5.2 `run.sh`: base image 构建命令添加 `--build-arg APT_MIRROR="${APT_MIRROR:-}"`
+
+### 涉及文件
+
+| 文件 | 改动项 |
+|------|--------|
+| `platform/Dockerfile.mock` | P0-1 (CMD → bash start.sh) |
+| `platform/docker-compose.yaml` | P0-1 (移除 MOCK_ENTRY), P0-2 (RESULTS_PATH) |
+| `run.sh` | P0-2 (export), P0-3 (-p 隔离), P1-2 (APT_MIRROR) |
+| `.env.example` | P1-1 (醒目提示) |
+| `platform/Dockerfile.base` | P1-2 (APT_MIRROR arg) |
+| `eval-bench-data/tasks/*/mocks/start.sh` | P0-1 (37 个测例新增) |
+
+### 设计决策
+
+**P0-1 为什么选择约定 `start.sh` 而非自动检测 .py？**
+- 自动检测依赖"目录下只有一个 .py"的假设，不够严谨
+- `start.sh` 是显式约定，各测例完全控制启动逻辑（可做环境变量设置、多进程启动等）
+- 框架只负责 `bash /mocks/start.sh`，简单可靠
+- 新增测例只需在 `mocks/` 下提供 `start.sh`，规范写入 TASK_SPEC.md
+
+### 完成时间
+- 2026-03-09 14:50
+
+---
+
 ## 🔜 待办
 
 - [ ] 推送至 GitHub 仓库 (`zhangxc11/nanobot-eval-bench`)

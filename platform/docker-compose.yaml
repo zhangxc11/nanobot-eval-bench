@@ -20,7 +20,7 @@ services:
       # 任务定义（只读）— 支持内置或外部测例目录
       - ${TASK_DIR_HOST:-../tasks/task-001-doubao-search-skill}:/eval/task:ro
       # 结果输出
-      - ../results/${RUN_ID:-latest}:/eval/results
+      - ${RESULTS_PATH:-../results/latest}:/eval/results
     environment:
       - AGENT_API_KEY=${AGENT_API_KEY}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-anthropic}

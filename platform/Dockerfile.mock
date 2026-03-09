@@ -11,5 +11,6 @@ EXPOSE 18080
 HEALTHCHECK --interval=3s --timeout=2s --retries=5 \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:18080/health')" || exit 1
 
-# Mock 脚本通过 volume 挂载
-CMD ["python3", "volcengine_mock.py"]
+# Mock 脚本通过 volume 挂载，约定入口为 /mocks/start.sh
+# 各测例的 mocks/ 目录下必须提供 start.sh 作为统一启动脚本
+CMD ["bash", "/mocks/start.sh"]
