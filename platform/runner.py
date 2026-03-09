@@ -357,23 +357,19 @@ def copy_session_as_trajectory():
 
 
 def run_verification(task: dict) -> dict:
-    """Run hard success criteria verification.
+    """Run hard verification using pytest verify_script.
 
-    Supports two verification methods:
-    1. Built-in rules (success_criteria string list, backward-compatible)
-    2. pytest script (verify_script field, recommended for complex verification)
+    verify_script is the only supported verification method.
+    success_criteria (declarative rules) is deprecated and will be ignored.
     """
     results = {}
 
-    # Method 1: Built-in rules
-    for criterion in task.get("success_criteria", []):
-        try:
-            passed = verify_criterion(criterion, task)
-            results[criterion] = {"passed": passed, "error": None}
-        except Exception as e:
-            results[criterion] = {"passed": False, "error": str(e)}
+    # Warn if deprecated success_criteria is still present
+    if task.get("success_criteria"):
+        print("[runner] WARNING: success_criteria is deprecated, use verify_script instead",
+              file=sys.stderr)
 
-    # Method 2: pytest script
+    # Run pytest verify_script
     verify_script = task.get("verify_script")
     if verify_script:
         script_path = TASK_DIR / verify_script
@@ -386,6 +382,9 @@ def run_verification(task: dict) -> dict:
                 "passed": False,
                 "error": f"Script not found: {verify_script}"
             }
+    else:
+        print("[runner] WARNING: No verify_script defined, skipping verification",
+              file=sys.stderr)
 
     return results
 
@@ -407,12 +406,22 @@ def _run_pytest(script_path: Path, task: dict) -> dict:
         "WORKSPACE": str(WORKSPACE),
         "TASK_DIR": str(TASK_DIR),
         "NANOBOT_HOME": str(NANOBOT_HOME),
+        "RESULTS_DIR": str(RESULTS_DIR),
+        "TASK_ID": task.get("id", ""),
+        "TASK_NAME": task.get("name", ""),
     }
 
     # Set PROJECT_DIR if initial_state_mapping has project_code
     mapping = task.get("initial_state_mapping", {})
     if "project_code" in mapping:
         env["PROJECT_DIR"] = str(EVAL_HOME / mapping["project_code"])
+    else:
+        # Try common project directory paths
+        for candidate in ["project", "project_code"]:
+            candidate_path = WORKSPACE / candidate
+            if candidate_path.exists() and candidate_path.is_dir():
+                env["PROJECT_DIR"] = str(candidate_path)
+                break
 
     # Run pytest with JSON report
     json_report = RESULTS_DIR / "pytest_report.json"
@@ -475,130 +484,6 @@ def _parse_pytest_stdout(result: subprocess.CompletedProcess, results: dict):
             "passed": passed,
             "error": None if passed else (result.stdout[-500:] if result.stdout else result.stderr[-500:])
         }
-
-
-def verify_criterion(criterion: str, task: dict) -> bool:
-    """Verify a single success criterion (built-in rules).
-
-    Supports:
-    - File existence: "path 存在" / "path exists"
-    - File content: "path 包含 keyword" / "path contains keyword"
-    - Combined: "path 存在且包含 keyword" / "path exists and contains keyword"
-    - Task-specific rules (backward-compatible with task-001)
-    """
-    ws = WORKSPACE
-
-    # ─── Task-001 specific rules (checked first to avoid generic mismatch) ─
-    if "SKILL.md" in criterion and "doubao-search" in criterion:
-        path = ws / "skills/doubao-search/SKILL.md"
-        if not path.exists():
-            return False
-        if "YAML frontmatter" in criterion:
-            return path.read_text().strip().startswith("---")
-        return True
-
-    if "doubao_search.py" in criterion and "三个子命令" in criterion:
-        script = ws / "skills/doubao-search/scripts/doubao_search.py"
-        if not script.exists():
-            return False
-        r = subprocess.run(
-            [sys.executable, str(script), "--help"],
-            capture_output=True, text=True, timeout=10,
-        )
-        output = r.stdout + r.stderr
-        return ("search" in output and "fetch" in output)
-
-    if "config.json 读取" in criterion or "不硬编码" in criterion:
-        for script_path in ws.rglob("*.py"):
-            content = script_path.read_text()
-            if "config" in content.lower() or "environ" in content.lower():
-                return True
-        return False
-
-    if "mock API" in criterion or "返回有效 JSON" in criterion:
-        script = ws / "skills/doubao-search/scripts/doubao_search.py"
-        if not script.exists():
-            return False
-        env = {**os.environ, "NANOBOT_HOME": str(NANOBOT_HOME)}
-        r = subprocess.run(
-            [sys.executable, str(script), "search", "Python latest version"],
-            capture_output=True, text=True, timeout=15, env=env,
-        )
-        try:
-            result = json.loads(r.stdout)
-            return isinstance(result, (list, dict))
-        except (json.JSONDecodeError, ValueError):
-            return False
-
-    if "REQUIREMENTS.md" in criterion:
-        return (ws / "skills/doubao-search/docs/REQUIREMENTS.md").exists()
-
-    # ─── Generic: combined "存在且包含" / "exists and contains" ─
-    if ("存在且包含" in criterion or
-            ("exists" in criterion.lower() and "contains" in criterion.lower())):
-        if "存在且包含" in criterion:
-            parts = criterion.split("存在且包含", 1)
-        else:
-            # "path exists and contains keyword"
-            idx = criterion.lower().index("exists")
-            parts = [criterion[:idx].strip()]
-            rest = criterion[idx + len("exists"):]
-            # strip " and contains " or " and contains"
-            rest = rest.strip()
-            if rest.lower().startswith("and contains"):
-                rest = rest[len("and contains"):].strip()
-            elif rest.lower().startswith("and"):
-                rest = rest[3:].strip()
-                if rest.lower().startswith("contains"):
-                    rest = rest[len("contains"):].strip()
-            parts.append(rest)
-        path_str = parts[0].strip()
-        keyword = parts[1].strip() if len(parts) > 1 else ""
-
-        target = ws / path_str
-        if not target.exists():
-            target = EVAL_HOME / path_str
-        if not target.exists():
-            return False
-        content = target.read_text()
-        return keyword.lower() in content.lower()
-
-    # ─── Generic: file existence ────────────────────
-    if criterion.endswith("存在") or criterion.endswith("exists"):
-        path_str = criterion.rsplit("存在", 1)[0].rsplit("exists", 1)[0].strip()
-        if "且" in path_str:
-            path_str = path_str.split("且")[0].strip()
-        if " and " in path_str.lower():
-            path_str = path_str.split(" and ")[0].strip()
-
-        target = ws / path_str
-        if not target.exists():
-            target = EVAL_HOME / path_str
-        return target.exists()
-
-    # ─── Generic: file contains keyword ─────────────
-    if "包含" in criterion or "contains" in criterion.lower():
-        # Format: "path 包含 keyword" or "path contains keyword"
-        if "包含" in criterion:
-            parts = criterion.split("包含", 1)
-        else:
-            parts = criterion.lower().split("contains", 1)
-            parts[0] = criterion[:len(parts[0])]  # preserve original case for path
-        path_str = parts[0].strip()
-        keyword = parts[1].strip() if len(parts) > 1 else ""
-
-        target = ws / path_str
-        if not target.exists():
-            target = EVAL_HOME / path_str
-        if not target.exists():
-            return False
-        content = target.read_text()
-        return keyword.lower() in content.lower()
-
-    # Default: unknown criterion passes with warning
-    print(f"[runner] WARNING: Unknown criterion, defaulting to pass: {criterion[:80]}",
-          file=sys.stderr)
-    return True
 
 
 def collect_metrics(start_time: float, task: dict) -> RunMetrics:

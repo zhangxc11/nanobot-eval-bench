@@ -45,17 +45,15 @@ source_sessions:                  # 来源 session（追溯用）
   - "webchat_1772349033"
 ```
 
-### 验证字段（至少选一种）
+### 验证字段
 
 ```yaml
-# 方式 1: 声明式规则（简单验证）
-success_criteria:
-  - "skills/doubao-search/SKILL.md 存在且包含 YAML frontmatter"
-  - "skills/doubao-search/scripts/doubao_search.py 存在"
-
-# 方式 2: pytest 脚本（复杂验证）
+# pytest 脚本（必须）
 verify_script: "verify/test_analytics.py"
 ```
+
+> **⚠️ Deprecated**: `success_criteria`（声明式规则列表）已废弃，不再被 runner.py 执行。
+> 所有测例必须使用 `verify_script` 提供 pytest 验证脚本。
 
 ### 可选字段
 
@@ -143,19 +141,13 @@ config_overrides:
 
 ## 验证规则语法
 
-### 声明式规则 (success_criteria)
+### ~~声明式规则 (success_criteria)~~ — **DEPRECATED**
 
-| 语法 | 含义 | 示例 |
-|------|------|------|
-| `path 存在` | 文件/目录存在 | `skills/my-skill/SKILL.md 存在` |
-| `path exists` | 同上（英文） | `scripts/main.py exists` |
-| `path 包含 keyword` | 文件内容包含 | `SKILL.md 包含 description` |
-| `path contains keyword` | 同上（英文） | `main.py contains import` |
-| `path 存在且包含 keyword` | 组合规则 | `SKILL.md 存在且包含 YAML frontmatter` |
+> **已废弃**：`success_criteria` 声明式规则已在 Phase 8 (P2) 中废弃。
+> runner.py 不再执行 `success_criteria` 中的规则，仅打印 WARNING 日志。
+> 所有测例必须使用 `verify_script` 提供 pytest 验证脚本。
 
-**路径解析**：先在 `workspace/` 下查找，找不到则在 `$HOME/` 下查找。
-
-### pytest 脚本 (verify_script)
+### pytest 脚本 (verify_script) — **必须**
 
 pytest 脚本通过环境变量获取路径：
 
@@ -163,7 +155,11 @@ pytest 脚本通过环境变量获取路径：
 |------|-----|------|
 | `EVAL_HOME` | `/eval` | 容器 HOME |
 | `WORKSPACE` | `/eval/.nanobot/workspace` | nanobot workspace |
+| `NANOBOT_HOME` | `/eval/.nanobot` | nanobot 配置目录 |
 | `TASK_DIR` | `/eval/task` | 任务定义目录 |
+| `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
+| `TASK_ID` | task.yaml 中的 id | 任务 ID |
+| `TASK_NAME` | task.yaml 中的 name | 任务名称 |
 | `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录（Type B） |
 
 ## 分类列表
@@ -245,12 +241,14 @@ exec python3 /mocks/minimal_mock.py
 
 ## 示例
 
-### 最简测例（Type A，单轮，声明式验证）
+### 最简测例（Type A，单轮，pytest 验证）
 
 ```
 task-simple-example/
 ├── task.yaml
 ├── query.md
+├── verify/
+│   └── test_hello.py
 └── mocks/
     ├── start.sh
     └── minimal_mock.py
@@ -262,9 +260,7 @@ id: "task-simple"
 name: "创建 Hello World Skill"
 category: "skill_development"
 difficulty: "easy"
-success_criteria:
-  - "skills/hello-world/SKILL.md 存在"
-  - "skills/hello-world/scripts/hello.py 存在"
+verify_script: "verify/test_hello.py"
 ```
 
 ```markdown

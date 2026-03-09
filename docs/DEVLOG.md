@@ -307,6 +307,68 @@
 
 ---
 
+## Phase 8: P2 验证逻辑统一 — 废弃 success_criteria，统一 pytest verify_script (2026-03-09)
+
+### 背景
+- 0307 批量评测反馈的 P2 项：验证逻辑改进
+- runner.py 原有两套验证机制：success_criteria（声明式自然语言规则）+ verify_script（pytest 脚本）
+- 声明式规则解析器 `verify_criterion()` 约 120 行，维护成本高、覆盖场景有限
+- 决策：废弃 success_criteria，统一使用 pytest verify_script
+
+### 任务清单
+
+#### 8.1 框架侧 (eval-bench)
+- [x] 8.1.1 runner.py: 删除 `verify_criterion()` 函数（~120 行自然语言解析器）
+- [x] 8.1.2 runner.py: 重写 `run_verification()`，仅保留 verify_script 路径
+  - success_criteria 存在时打 WARNING 日志但不执行
+  - verify_script 不存在时打 WARNING 并返回空 results
+- [x] 8.1.3 runner.py: `_run_pytest()` 补充环境变量（RESULTS_DIR、TASK_ID、TASK_NAME）
+  - PROJECT_DIR 在无 initial_state_mapping 时也尝试从常见路径设置
+- [x] 8.1.4 docker-compose.yaml: agent-runner 添加 `env_file: - ../.env`
+
+#### 8.2 测例侧 — 27 个同时有 success_criteria + verify_script 的测例
+- [x] 8.2.1 批量删除 task.yaml 中的 success_criteria 字段
+  - task-002, task-004, task-006~task-017, task-019~task-024, task-026~task-027, task-032~task-036
+  - verify_script 字段保留不变
+
+#### 8.3 测例侧 — 6 个仅有 success_criteria 的测例（新建 verify_script）
+- [x] 8.3.1 task-001: verify/test_doubao_search.py（6 个测试：SKILL.md frontmatter、脚本存在可执行、三子命令、无硬编码 key、mock JSON、REQUIREMENTS.md）
+- [x] 8.3.2 task-003: verify/test_dev_workflow.py（5 个测试：SKILL.md frontmatter、新功能开发、分支策略、开发纪律、MEMORY.md 引用）
+- [x] 8.3.3 task-005: verify/test_email_probe.py（2 个测试：无虚假邮件操作、明确表示无邮件能力；从 turns.json/trajectory.jsonl 读取 agent 回复）
+- [x] 8.3.4 task-025: verify/test_memory_reorg.py（6 个测试：MEMORY.md 存在+内容、PROJECT_WEBCHAT.md 存在+Phase、PROJECT_NANOBOT_CORE.md 存在+Phase）
+- [x] 8.3.5 task-028: verify/test_gateway_diagnosis.py（3 个测试：报告存在、包含诊断、包含建议）
+- [x] 8.3.6 task-031: verify/test_thoughts_to_doc.py（4 个测试：ROADMAP 存在、架构、Provider、安全）
+
+#### 8.4 文档更新
+- [x] 8.4.1 TASK_SPEC.md: success_criteria 标记为 deprecated，verify_script 标记为必须
+  - 更新验证字段说明、验证规则语法、环境变量表、示例
+- [x] 8.4.2 DEVLOG.md: 添加 Phase 8 记录
+
+### 涉及文件
+
+| 仓库 | 文件 | 改动 |
+|------|------|------|
+| eval-bench | platform/runner.py | 删除 verify_criterion()、重写 run_verification()、_run_pytest() 增强 |
+| eval-bench | platform/docker-compose.yaml | 添加 env_file |
+| eval-bench | docs/TASK_SPEC.md | success_criteria deprecated、verify_script 必须 |
+| eval-bench | docs/DEVLOG.md | Phase 8 记录 |
+| eval-bench-data | 27 个 task.yaml | 删除 success_criteria 字段 |
+| eval-bench-data | 6 个 verify/*.py | 新建 pytest 验证脚本 |
+| eval-bench-data | 6 个 task.yaml | 替换 success_criteria 为 verify_script |
+
+### 设计决策
+
+**为什么废弃 success_criteria 而非增强？**
+- 自然语言解析器本质上是 pattern matching，覆盖场景有限
+- 每新增一种验证模式就要修改 runner.py，维护成本高
+- pytest 脚本可以做任意复杂验证（文件检查、代码分析、数据库查询、session 分析等）
+- 统一为 pytest 后，verify 脚本可以独立测试和调试
+
+### 完成时间
+- 2026-03-09 15:24
+
+---
+
 ## 🔜 待办
 
 - [ ] 推送至 GitHub 仓库 (`zhangxc11/nanobot-eval-bench`)

@@ -21,6 +21,8 @@ services:
       - ${TASK_DIR_HOST:-../tasks/task-001-doubao-search-skill}:/eval/task:ro
       # 结果输出
       - ${RESULTS_PATH:-../results/latest}:/eval/results
+    env_file:
+      - ../.env
     environment:
       - AGENT_API_KEY=${AGENT_API_KEY}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-anthropic}
