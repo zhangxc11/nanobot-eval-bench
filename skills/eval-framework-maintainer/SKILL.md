@@ -44,10 +44,11 @@ python3 scripts/check_compatibility.py --tasks-dir eval-bench/tasks/
 
 检查项：
 1. task.yaml 能否被 runner.py 正确解析
-2. success_criteria 中的规则能否被 verify_criterion 识别
-3. query.md 能否被 load_queries 正确解析
+2. task.yaml 使用 `verify_script` 字段（`success_criteria` 已废弃，runner.py 不再执行）
+3. query.md 能否被 load_queries 正确解析（`## Turn N:` 格式）
 4. initial_state_mapping 路径是否有效
 5. verify_script 路径是否存在
+6. mocks/start.sh 是否存在（框架统一入口）
 
 ## 关键文件
 
@@ -55,7 +56,8 @@ python3 scripts/check_compatibility.py --tasks-dir eval-bench/tasks/
 |------|------|
 | `eval-bench/platform/runner.py` | 核心执行器 |
 | `eval-bench/platform/docker-compose.yaml` | Docker 编排 |
-| `eval-bench/run.sh` | 入口脚本 |
+| `eval-bench/run.sh` | 单测例入口脚本 |
+| `eval-bench/batch_run.sh` | 批量运行脚本 |
 | `eval-bench/docs/TASK_SPEC.md` | 测例规范 |
 | `eval-bench/docs/DEVLOG.md` | 开发日志 |
 | `eval-bench/platform/DESIGN.md` | 技术方案 |

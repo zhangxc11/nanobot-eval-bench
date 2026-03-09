@@ -36,8 +36,11 @@ task-{NNN}/
 │   ├── skills/            #   预置 skill
 │   ├── memory/            #   预置记忆
 │   └── {project_dir}/     #   项目代码（需配合 initial_state_mapping）
-├── verify/                # 可选 — pytest 验证脚本
+├── verify/                # 必须 — pytest 验证脚本
 │   └── test_task.py       #   规则检查代码
+├── mocks/                 # 必须 — Mock 服务（即使不需要 mock 也要提供最小版）
+│   ├── start.sh           #   统一启动入口（框架执行 bash /mocks/start.sh）
+│   └── minimal_mock.py    #   Mock 服务实现
 ├── eval_prompt.md         # 可选 — LLM 评分说明
 └── README.md              # 可选 — 测例说明
 ```
@@ -62,27 +65,42 @@ initial_state_mapping:
   "memory/": "workspace/memory/"
   "{project_dir}/": "project/{project_dir}/"
 
-# 验证配置
-verification:
-  type: "pytest"           # pytest | llm | both
-  pytest_dir: "verify/"
-  eval_prompt: "eval_prompt.md"
-  scoring:
-    rule_based_weight: 0.6
-    llm_based_weight: 0.4
+# 验证配置 — 必须使用 verify_script
+verify_script: "verify/test_task.py"
+
+# ⚠️ DEPRECATED: success_criteria 已废弃，runner.py 不再执行
+# 所有测例必须使用 verify_script 提供 pytest 验证脚本
 ```
 
 ### 2.3 query.md 格式
 
 ```markdown
-# Query
+## Turn 1: 主要指令
 
-{用户的问题/任务描述}
-
-<!-- 如果是多轮对话，用分隔符标记 -->
----TURN---
-{第二轮用户消息}
+\```
+用户的问题/任务描述
+\```
 ```
+
+多轮对话：
+
+```markdown
+## Turn 1: 初始需求
+
+\```
+第一轮 query
+\```
+
+## Turn 2: 补充信息
+
+\```
+第二轮 query（可以引用第一轮的结果）
+\```
+```
+
+**注意**：
+- 每个 Turn 的内容必须在 ``` 代码块内
+- Turn 标题格式: `## Turn N: 描述`
 
 ### 2.4 verify/test_task.py 结构
 
@@ -91,8 +109,14 @@ verification:
 import os
 import pytest
 
+# 框架通过环境变量传递所有路径，verify 脚本不应硬编码路径
 WORKSPACE = os.environ.get("WORKSPACE", ".")
 PROJECT_DIR = os.environ.get("PROJECT_DIR", WORKSPACE)
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "/eval/results")
+TASK_ID = os.environ.get("TASK_ID", "")
+TASK_NAME = os.environ.get("TASK_NAME", "")
+NANOBOT_HOME = os.environ.get("NANOBOT_HOME", "/eval/.nanobot")
+TASK_DIR = os.environ.get("TASK_DIR", "/eval/task")
 
 class TestTaskVerification:
     """规则检查"""
@@ -110,6 +134,19 @@ class TestTaskVerification:
         """检查没有引入回归问题"""
         # ...
 ```
+
+**环境变量完整列表**（由 runner.py `_run_pytest()` 传递）：
+
+| 变量 | 值 | 说明 |
+|------|-----|------|
+| `EVAL_HOME` | `/eval` | 容器 HOME |
+| `WORKSPACE` | `/eval/.nanobot/workspace` | nanobot workspace |
+| `NANOBOT_HOME` | `/eval/.nanobot` | nanobot 配置目录 |
+| `TASK_DIR` | `/eval/task` | 任务定义目录 |
+| `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
+| `TASK_ID` | task.yaml 中的 id | 任务 ID（如 `task-001`） |
+| `TASK_NAME` | task.yaml 中的 name | 任务名称 |
+| `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录（Type B） |
 
 ### 2.5 eval_prompt.md 结构
 
@@ -249,12 +286,13 @@ class TestTaskVerification:
 ```
 执行顺序:
 1. 创建 task-{NNN}/ 目录
-2. 写 task.yaml（元数据 + 映射 + 验证配置）
-3. 写 query.md
+2. 写 task.yaml（元数据 + verify_script 字段）
+3. 写 query.md（Turn 格式）
 4. 构造 initial_state/（最耗时的步骤）
-5. 写 verify/test_task.py
-6. 写 eval_prompt.md
-7. 写 README.md（可选）
+5. 写 verify/test_task.py（使用环境变量获取路径）
+6. 创建 mocks/start.sh + mock 脚本（即使不需要 mock 也要提供最小版）
+7. 写 eval_prompt.md
+8. 写 README.md（可选）
 ```
 
 ### 3.5 Step 5: 自检
@@ -263,10 +301,14 @@ class TestTaskVerification:
 
 ```
 □ task.yaml 格式正确，所有必填字段都有值
+□ task.yaml 使用 verify_script 字段（非 deprecated 的 success_criteria）
 □ query.md 自包含，不依赖外部上下文
+□ query.md 使用 "## Turn N:" 格式（内容在代码块内）
 □ initial_state/ 包含任务所需的所有文件
 □ initial_state/ 中的代码是完整的（不是摘录/简化版）
 □ verify/test_task.py 语法正确（python -m py_compile）
+□ verify 脚本使用环境变量获取路径（WORKSPACE/PROJECT_DIR/RESULTS_DIR 等）
+□ mocks/start.sh 存在且可执行（即使不需要 mock 也要提供最小版）
 □ eval_prompt.md 评分维度覆盖任务核心目标
 □ 敏感信息已脱敏（API key、真实 ID、密码等）
 □ .git 目录（如有）已用 orphan branch 精简
@@ -435,9 +477,11 @@ git gc --prune=now --aggressive
 - 实际 eval 运行时，框架会按 mapping 重新组织目录，verify 脚本应使用 `WORKSPACE`/`PROJECT_DIR` 环境变量
 
 ```python
-# verify 脚本中的正确写法
+# verify 脚本中的正确写法 — 使用环境变量，不硬编码路径
 WORKSPACE = os.environ.get("WORKSPACE", ".")
 PROJECT_DIR = os.environ.get("PROJECT_DIR", os.path.join(WORKSPACE, "project"))
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "/eval/results")
+TASK_ID = os.environ.get("TASK_ID", "")
 ```
 
 ### 5.5 Query 设计
