@@ -59,6 +59,12 @@ tags: ["tag1", "tag2"]
 time_limit: 300           # 秒，默认 300
 max_iterations: 30        # agent 最大迭代次数
 
+# 环境初始化脚本（可选）
+# 在 initial_state 复制完成后、config 写入前执行
+# 典型用途：初始化 git 仓库、创建分支、构造复杂初始状态
+setup_script: "initial_state/setup_repo.sh"   # 相对于 TASK_DIR
+setup_args: ["project/repo"]                   # 相对路径会基于 EVAL_HOME 解析
+
 # 初始状态映射（将 initial_state/ 下的目录映射到 agent 的工作环境）
 initial_state_mapping:
   "skills/": "workspace/skills/"
@@ -338,6 +344,8 @@ class TestTaskVerification:
 □ 敏感信息已脱敏（API key、真实 ID、密码等）
 □ .git 目录体积合理：不涉及 git 操作的用 orphan branch 精简；涉及 git 操作的保留必要历史链条
 □ initial_state_mapping 路径与 verify 脚本中的路径一致
+□ 如有 setup_script，脚本存在且可执行；setup_args 路径正确
+□ verify 脚本中的数据库查询按 session_key 过滤，避免全表统计
 ```
 
 ### 3.6 Step 6: 记录决策点
@@ -552,6 +560,10 @@ TASK_ID = os.environ.get("TASK_ID", "")
 - **容错性**：允许合理的实现差异（如函数名不同但功能正确）
 - **Dry-run 友好**：在 initial_state 上运行应该 fail（因为任务没做），但不应因语法错误而 crash
 - **路径使用环境变量**：`WORKSPACE`、`PROJECT_DIR`、`NANOBOT_DIR`
+- **数据库查询按 session_key 过滤**：如果 verify 脚本查询 analytics.db 等数据库，
+  **避免全表 COUNT/SUM**（如 `SELECT COUNT(*) FROM token_usage`），
+  因为 agent 自身的 eval session 也会写入同一数据库。
+  应按 session_key 过滤：`WHERE session_key LIKE 'webchat:test_session_%'`
 
 ### 5.7 决策点处理策略
 

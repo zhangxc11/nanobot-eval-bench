@@ -145,7 +145,8 @@ def setup_nanobot_home(task: dict):
     if setup_script:
         script_path = TASK_DIR / setup_script
         if not script_path.exists():
-            print(f"[runner] ERROR: setup_script not found: {script_path}", file=sys.stderr)
+            print(f"[runner] FATAL: setup_script not found: {script_path}", file=sys.stderr)
+            sys.exit(1)
         else:
             setup_args = task.get("setup_args", [])
             # Resolve relative paths in setup_args relative to EVAL_HOME
@@ -166,14 +167,17 @@ def setup_nanobot_home(task: dict):
                 if result.stderr:
                     print(f"[runner] setup_script stderr:\n{result.stderr[:1000]}", file=sys.stderr)
                 if result.returncode != 0:
-                    print(f"[runner] ERROR: setup_script exited with code {result.returncode}",
+                    print(f"[runner] FATAL: setup_script exited with code {result.returncode}",
                           file=sys.stderr)
+                    sys.exit(1)
                 else:
                     print("[runner] setup_script completed successfully", file=sys.stderr)
             except subprocess.TimeoutExpired:
-                print("[runner] ERROR: setup_script timed out after 120s", file=sys.stderr)
+                print("[runner] FATAL: setup_script timed out after 120s", file=sys.stderr)
+                sys.exit(1)
             except Exception as e:
-                print(f"[runner] ERROR: setup_script failed: {e}", file=sys.stderr)
+                print(f"[runner] FATAL: setup_script failed: {e}", file=sys.stderr)
+                sys.exit(1)
 
     _write_config(task)
 

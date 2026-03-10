@@ -549,7 +549,9 @@ curl --max-time 5 -X POST http://localhost:8082/api/execute-stream \
 - .git 目录必须用 orphan branch 精简
 - task.yaml 必须使用 `verify_script` 字段（`success_criteria` 已废弃）
 - verify 脚本使用环境变量获取路径（WORKSPACE/PROJECT_DIR/RESULTS_DIR/TASK_ID 等）
+- verify 脚本查询数据库时按 session_key 过滤，**避免全表 COUNT**（agent 自身 eval session 也会写入同一 DB）
 - mocks/ 目录必须包含 start.sh 统一启动入口（即使不需要 mock 也要提供最小版）
+- 如需在 initial_state 复制后执行初始化（如创建 git 分支），使用 `setup_script` + `setup_args`
 - query.md 使用 `## Turn N:` 格式，内容在代码块内
 - 遇到高不确定性决策，标记 needs_review 并停下
 - 所有决策点都要记录，不能静默忽略

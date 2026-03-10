@@ -49,6 +49,32 @@ python3 scripts/check_compatibility.py --tasks-dir eval-bench/tasks/
 4. initial_state_mapping 路径是否有效
 5. verify_script 路径是否存在
 6. mocks/start.sh 是否存在（框架统一入口）
+7. 如有 setup_script，脚本文件是否存在
+
+## runner.py 关键机制
+
+### setup_script（Phase 10 新增）
+
+task.yaml 可声明 `setup_script` 和 `setup_args`，runner.py 在 `setup_nanobot_home()` 中
+复制完 initial_state 之后、写 config 之前执行：
+
+```python
+# task.yaml 示例
+setup_script: "initial_state/setup_repo.sh"
+setup_args: ["project/repo"]  # 相对路径基于 EVAL_HOME 解析
+```
+
+执行逻辑：`bash <TASK_DIR/setup_script> <EVAL_HOME/arg1> <EVAL_HOME/arg2> ...`
+
+### trajectory 精确匹配（Phase 10 修复）
+
+`copy_session_as_trajectory()` 优先按 SESSION_ID 精确匹配文件名
+（`eval:task-001` → `eval_task-001.jsonl`），找不到再 fallback 到 glob 第一个。
+
+### verify 脚本数据隔离
+
+verify 脚本中查询数据库时，应按 session_key 过滤，避免全表统计。
+agent 自身的 eval session（如 `eval:task-006`）也会写入 analytics.db。
 
 ## 关键文件
 
