@@ -140,6 +140,41 @@ def setup_nanobot_home(task: dict):
                 shutil.copy2(f, WORKSPACE / f.name)
                 print(f"[runner] Copied file: {f.name}", file=sys.stderr)
 
+    # Run setup_script if declared (after initial_state copy, before config write)
+    setup_script = task.get("setup_script")
+    if setup_script:
+        script_path = TASK_DIR / setup_script
+        if not script_path.exists():
+            print(f"[runner] ERROR: setup_script not found: {script_path}", file=sys.stderr)
+        else:
+            setup_args = task.get("setup_args", [])
+            # Resolve relative paths in setup_args relative to EVAL_HOME
+            resolved_args = [str(EVAL_HOME / arg) for arg in setup_args]
+            cmd = ["bash", str(script_path)] + resolved_args
+            print(f"[runner] Running setup_script: {' '.join(cmd)}", file=sys.stderr)
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    cwd=str(EVAL_HOME),
+                    env={**os.environ, "HOME": str(EVAL_HOME), "EVAL_HOME": str(EVAL_HOME)},
+                )
+                if result.stdout:
+                    print(f"[runner] setup_script stdout:\n{result.stdout[:1000]}", file=sys.stderr)
+                if result.stderr:
+                    print(f"[runner] setup_script stderr:\n{result.stderr[:1000]}", file=sys.stderr)
+                if result.returncode != 0:
+                    print(f"[runner] ERROR: setup_script exited with code {result.returncode}",
+                          file=sys.stderr)
+                else:
+                    print("[runner] setup_script completed successfully", file=sys.stderr)
+            except subprocess.TimeoutExpired:
+                print("[runner] ERROR: setup_script timed out after 120s", file=sys.stderr)
+            except Exception as e:
+                print(f"[runner] ERROR: setup_script failed: {e}", file=sys.stderr)
+
     _write_config(task)
 
 
@@ -344,16 +379,34 @@ def snapshot_final_state(task: dict):
 
 
 def copy_session_as_trajectory():
-    """Copy nanobot session JSONL as trajectory."""
+    """Copy nanobot session JSONL as trajectory.
+
+    Matches the eval session file by SESSION_ID (e.g. "eval:task-001" -> "eval_task-001.jsonl").
+    Falls back to the first .jsonl file if no exact match is found (backward compatibility).
+    """
     sessions_dir = WORKSPACE / "sessions"
     if not sessions_dir.exists():
         return
 
-    for f in sessions_dir.glob("*.jsonl"):
-        dest = RESULTS_DIR / "trajectory.jsonl"
-        shutil.copy2(f, dest)
-        print(f"[runner] Trajectory saved: {f.name} -> {dest}", file=sys.stderr)
+    dest = RESULTS_DIR / "trajectory.jsonl"
+
+    # Precise match: SESSION_ID with ":" replaced by "_"
+    expected_name = SESSION_ID.replace(":", "_") + ".jsonl"
+    expected_file = sessions_dir / expected_name
+    if expected_file.exists():
+        shutil.copy2(expected_file, dest)
+        print(f"[runner] Trajectory saved (exact match): {expected_name} -> {dest}",
+              file=sys.stderr)
         return
+
+    # Fallback: first .jsonl file (backward compatibility)
+    for f in sessions_dir.glob("*.jsonl"):
+        shutil.copy2(f, dest)
+        print(f"[runner] Trajectory saved (fallback, no match for '{expected_name}'): "
+              f"{f.name} -> {dest}", file=sys.stderr)
+        return
+
+    print(f"[runner] WARNING: No session JSONL found in {sessions_dir}", file=sys.stderr)
 
 
 def run_verification(task: dict) -> dict:

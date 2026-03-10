@@ -1,5 +1,53 @@
 # eval-bench 开发日志
 
+## Phase 10: Volcengine 评测反馈修复 (2026-03-11)
+
+### 背景
+- Volcengine 豆包模型评测报告（REPORT.md, 2026-03-09 ~ 03-10）反馈了 5 项框架级问题
+- 36 个测例端到端评测中，24 个记录了非 Agent 能力的问题
+- 本 Phase 修复 P0/P1 项，标记已完成/暂不修复项
+
+### 任务清单
+
+#### 10.1 runner.py 支持 setup_script（P0）
+- [x] 10.1.1 `setup_nanobot_home()` 在 initial_state 复制后、`_write_config()` 前，检查 `task.get("setup_script")`
+- [x] 10.1.2 如有 setup_script，构建命令 `["bash", TASK_DIR/setup_script] + [EVAL_HOME/arg for arg in setup_args]`
+- [x] 10.1.3 用 `subprocess.run()` 执行，打印 stdout/stderr，检查 returncode
+
+#### 10.2 trajectory.jsonl 只复制 eval session（P1）
+- [x] 10.2.1 计算期望文件名：`SESSION_ID.replace(":", "_") + ".jsonl"`
+- [x] 10.2.2 优先查找匹配 SESSION_ID 的文件
+- [x] 10.2.3 找不到再 fallback 到 glob 第一个（向后兼容）
+- [x] 10.2.4 打印日志说明匹配方式
+
+#### 10.3 task-006 test_total_records 隔离 agent usage（P1）
+- [x] 10.3.1 修改 eval-bench-data 的 `test_usage_cleanup.py`
+- [x] 10.3.2 `test_total_records` 改为只统计 `webchat:test_session_%` 的记录
+- [x] 10.3.3 添加注释说明过滤原因
+
+#### 10.4 Dispatcher 已改为 spawn（标记已完成）
+- [x] 10.4.1 最新版本已使用 spawn 方式调度，无需修改
+
+#### 10.5 LLM 评分用不同模型（暂不修复）
+- [x] 10.5.1 暂不在框架内实现，事后人工评分
+
+### 涉及文件
+
+| 仓库 | 文件 | 改动 |
+|------|------|------|
+| eval-bench | `platform/runner.py` | 10.1 (setup_script), 10.2 (trajectory 精确匹配) |
+| eval-bench | `docs/REQUIREMENTS.md` | 追加 R10.1~R10.5 需求 |
+| eval-bench | `docs/DEVLOG.md` | Phase 10 记录 |
+| eval-bench-data | `tasks/task-006-*/verify/test_usage_cleanup.py` | 10.3 (过滤 agent usage) |
+| skills | `eval-task-builder/SKILL.md` | setup_script 使用说明 |
+| skills | `eval-framework-maintainer/SKILL.md` | 框架维护更新 |
+| skills | `eval-task-batch-builder/SKILL.md` | setup_script 提醒 |
+
+### 完成时间
+- 2026-03-11
+
+---
+
 ## Phase 3: Issues v2 修复 + Task-002 代码修改类任务支持 (2026-03-04)
 
 ### 背景

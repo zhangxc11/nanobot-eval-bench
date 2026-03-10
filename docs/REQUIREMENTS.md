@@ -90,3 +90,40 @@
 - 每次代码提交自动跑评测
 - 回归检测
 - 评分趋势图
+
+---
+
+## Phase 10: Volcengine 评测反馈修复
+
+> 来源: Volcengine 豆包模型评测报告（REPORT.md, 2026-03-09 ~ 03-10）
+> 36 个测例端到端评测中暴露的框架级问题，按优先级修复。
+
+### R10.1 runner.py 支持 setup_script（P0）
+
+- task.yaml 可声明 `setup_script` 和 `setup_args` 字段
+- runner.py `setup_nanobot_home()` 在复制 initial_state 之后、写 config 之前执行 setup_script
+- 在容器内执行 `bash <TASK_DIR/setup_script> <setup_args...>`
+- setup_args 中的相对路径相对于 EVAL_HOME 解析
+- 使用场景：task-032（upstream merge）需要在 initial_state 复制完后初始化 git 仓库
+
+### R10.2 trajectory.jsonl 只复制 eval session（P1）
+
+- `copy_session_as_trajectory()` 应按 SESSION_ID 精确匹配 session 文件
+- 文件名格式：`{session_key}.jsonl`，其中 `:` 被替换为 `_`
+- 优先精确匹配，找不到再 fallback 到 glob 第一个（向后兼容）
+
+### R10.3 task-006 Agent usage 数据隔离（P1）
+
+- `test_total_records` 应只统计 `webchat:test_session_*` 的记录
+- Agent 自身的 eval session（`eval:task-006`）也会写入 analytics.db，需要过滤
+- 修复在 eval-bench-data 侧（verify/test_usage_cleanup.py）
+
+### R10.4 Dispatcher 已改为 spawn（已完成）
+
+- 最新版本已改为 spawn 方式调度，不再轮询
+- 无需额外修改
+
+### R10.5 LLM 评分用不同模型（暂不修复）
+
+- 暂不在框架内实现自动 LLM 评分模型切换
+- 当前策略：事后人工评分，不在任务执行时使用 LLM 打分
