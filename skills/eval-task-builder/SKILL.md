@@ -59,13 +59,8 @@ tags: ["tag1", "tag2"]
 time_limit: 300           # 秒，默认 300
 max_iterations: 30        # agent 最大迭代次数
 
-# 环境初始化脚本（可选）
-# 在 initial_state 复制完成后、config 写入前执行
-# 典型用途：初始化 git 仓库、创建分支、构造复杂初始状态
-setup_script: "initial_state/setup_repo.sh"   # 相对于 TASK_DIR
-setup_args: ["project/repo"]                   # 相对路径会基于 EVAL_HOME 解析
-
 # 初始状态映射（将 initial_state/ 下的目录映射到 agent 的工作环境）
+# 注意：需要 git 仓库的测例应提前构建好完整仓库（含 .git），直接通过映射复制
 initial_state_mapping:
   "skills/": "workspace/skills/"
   "memory/": "workspace/memory/"
@@ -344,7 +339,7 @@ class TestTaskVerification:
 □ 敏感信息已脱敏（API key、真实 ID、密码等）
 □ .git 目录体积合理：不涉及 git 操作的用 orphan branch 精简；涉及 git 操作的保留必要历史链条
 □ initial_state_mapping 路径与 verify 脚本中的路径一致
-□ 如有 setup_script，脚本存在且可执行；setup_args 路径正确
+□ 需要 git 仓库的测例：预构建完整仓库（含 .git + 所有分支），通过 initial_state_mapping 直接复制
 □ verify 脚本中的数据库查询按 session_key 过滤，避免全表统计
 ```
 

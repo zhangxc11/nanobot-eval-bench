@@ -9,10 +9,11 @@
 
 ### 任务清单
 
-#### 10.1 runner.py 支持 setup_script（P0）
-- [x] 10.1.1 `setup_nanobot_home()` 在 initial_state 复制后、`_write_config()` 前，检查 `task.get("setup_script")`
-- [x] 10.1.2 如有 setup_script，构建命令 `["bash", TASK_DIR/setup_script] + [EVAL_HOME/arg for arg in setup_args]`
-- [x] 10.1.3 用 `subprocess.run()` 执行，打印 stdout/stderr，检查 returncode
+#### 10.1 task-032 改为预构建 git 仓库（P0）
+- [x] 10.1.1 本地执行 setup_repo.sh 构建完整 git 仓库（含 local/upstream_main/main 三个分支）
+- [x] 10.1.2 将预构建仓库放入 `initial_state/nanobot_repo/`，通过 `initial_state_mapping` 直接复制
+- [x] 10.1.3 删除 `setup_script`/`setup_args` 字段、`repo_snapshots` 目录、`setup_repo.sh`
+- [x] 10.1.4 runner.py 移除 setup_script 机制（YAGNI，无其他使用场景）
 
 #### 10.2 trajectory.jsonl 只复制 eval session（P1）
 - [x] 10.2.1 计算期望文件名：`SESSION_ID.replace(":", "_") + ".jsonl"`
@@ -35,13 +36,15 @@
 
 | 仓库 | 文件 | 改动 |
 |------|------|------|
-| eval-bench | `platform/runner.py` | 10.1 (setup_script), 10.2 (trajectory 精确匹配) |
+| eval-bench | `platform/runner.py` | 10.1 (移除 setup_script), 10.2 (trajectory 精确匹配) |
 | eval-bench | `docs/REQUIREMENTS.md` | 追加 R10.1~R10.5 需求 |
 | eval-bench | `docs/DEVLOG.md` | Phase 10 记录 |
+| eval-bench-data | `tasks/task-032-*/task.yaml` | 10.1 (改为 nanobot_repo 映射) |
+| eval-bench-data | `tasks/task-032-*/initial_state/` | 10.1 (预构建 git 仓库替换 repo_snapshots) |
 | eval-bench-data | `tasks/task-006-*/verify/test_usage_cleanup.py` | 10.3 (过滤 agent usage) |
-| skills | `eval-task-builder/SKILL.md` | setup_script 使用说明 |
+| skills | `eval-task-builder/SKILL.md` | 预构建仓库说明 |
 | skills | `eval-framework-maintainer/SKILL.md` | 框架维护更新 |
-| skills | `eval-task-batch-builder/SKILL.md` | setup_script 提醒 |
+| skills | `eval-task-batch-builder/SKILL.md` | 预构建仓库提醒 |
 
 ### 完成时间
 - 2026-03-11

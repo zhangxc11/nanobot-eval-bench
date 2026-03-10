@@ -49,22 +49,9 @@ python3 scripts/check_compatibility.py --tasks-dir eval-bench/tasks/
 4. initial_state_mapping 路径是否有效
 5. verify_script 路径是否存在
 6. mocks/start.sh 是否存在（框架统一入口）
-7. 如有 setup_script，脚本文件是否存在
+7. 需要 git 仓库的测例是否预构建了完整仓库（含 .git + 所有分支）
 
 ## runner.py 关键机制
-
-### setup_script（Phase 10 新增）
-
-task.yaml 可声明 `setup_script` 和 `setup_args`，runner.py 在 `setup_nanobot_home()` 中
-复制完 initial_state 之后、写 config 之前执行：
-
-```python
-# task.yaml 示例
-setup_script: "initial_state/setup_repo.sh"
-setup_args: ["project/repo"]  # 相对路径基于 EVAL_HOME 解析
-```
-
-执行逻辑：`bash <TASK_DIR/setup_script> <EVAL_HOME/arg1> <EVAL_HOME/arg2> ...`
 
 ### trajectory 精确匹配（Phase 10 修复）
 

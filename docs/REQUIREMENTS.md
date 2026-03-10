@@ -98,13 +98,12 @@
 > 来源: Volcengine 豆包模型评测报告（REPORT.md, 2026-03-09 ~ 03-10）
 > 36 个测例端到端评测中暴露的框架级问题，按优先级修复。
 
-### R10.1 runner.py 支持 setup_script（P0）
+### R10.1 复杂初始状态预构建（P0）
 
-- task.yaml 可声明 `setup_script` 和 `setup_args` 字段
-- runner.py `setup_nanobot_home()` 在复制 initial_state 之后、写 config 之前执行 setup_script
-- 在容器内执行 `bash <TASK_DIR/setup_script> <setup_args...>`
-- setup_args 中的相对路径相对于 EVAL_HOME 解析
-- 使用场景：task-032（upstream merge）需要在 initial_state 复制完后初始化 git 仓库
+- 需要 git 仓库等复杂初始状态的测例，应在测例制作时一次性构建好
+- 预构建产物放在 `initial_state/` 中，通过 `initial_state_mapping` 直接复制到容器
+- runner.py 不提供 setup_script 机制（YAGNI）
+- 使用场景：task-032（upstream merge）预构建含三个分支的完整 git 仓库
 
 ### R10.2 trajectory.jsonl 只复制 eval session（P1）
 
