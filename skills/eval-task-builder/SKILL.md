@@ -61,10 +61,22 @@ max_iterations: 30        # agent 最大迭代次数
 
 # 初始状态映射（将 initial_state/ 下的目录映射到 agent 的工作环境）
 # 注意：需要 git 仓库的测例应提前构建好完整仓库（含 .git），直接通过映射复制
+#
+# ⚠️ 路径映射规则（runner.py 逻辑）：
+#   src_path = TASK_DIR/initial_state/{key}
+#   dest_path = EVAL_HOME/{value}     ← 即 /eval/{value}
+#
+# 容器目录结构：
+#   /eval                          ← EVAL_HOME
+#   /eval/.nanobot                 ← NANOBOT_HOME
+#   /eval/.nanobot/workspace       ← WORKSPACE（agent 的工作目录）
+#
+# 因此 value 必须以 ".nanobot/workspace/" 为前缀才能放到 agent workspace 下！
+# 常见错误：写成 "nanobot_core/" 会放到 /eval/nanobot_core/（workspace 外面）
 initial_state_mapping:
-  "skills/": "workspace/skills/"
-  "memory/": "workspace/memory/"
-  "{project_dir}/": "project/{project_dir}/"
+  "skills/": ".nanobot/workspace/skills/"
+  "memory/": ".nanobot/workspace/memory/"
+  "{project_dir}/": ".nanobot/workspace/{project_dir}/"
 
 # 验证配置 — 必须使用 verify_script
 verify_script: "verify/test_task.py"
@@ -147,7 +159,7 @@ class TestTaskVerification:
 | `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
 | `TASK_ID` | task.yaml 中的 id | 任务 ID（如 `task-001`） |
 | `TASK_NAME` | task.yaml 中的 name | 任务名称 |
-| `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录（Type B） |
+| `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录。runner.py 逻辑：若 mapping 有 `project_code` key 则 `EVAL_HOME/{value}`；否则自动查找 `WORKSPACE/project` 或 `WORKSPACE/project_code`。verify 脚本应设 fallback 默认值 |
 
 ### 2.5 eval_prompt.md 结构
 
@@ -338,7 +350,10 @@ class TestTaskVerification:
 □ eval_prompt.md 评分维度覆盖任务核心目标
 □ 敏感信息已脱敏（API key、真实 ID、密码等）
 □ .git 目录体积合理：不涉及 git 操作的用 orphan branch 精简；涉及 git 操作的保留必要历史链条
-□ initial_state_mapping 路径与 verify 脚本中的路径一致
+□ **initial_state_mapping 路径映射正确**（见 §5.4）：
+  - key 不含 `initial_state/` 前缀
+  - value 以 `.nanobot/workspace/` 开头（放到 agent workspace 下）
+  - verify 脚本中 PROJECT_DIR 默认值与 mapping value 对应
 □ 需要 git 仓库的测例：预构建完整仓库（含 .git + 所有分支），通过 initial_state_mapping 直接复制
 □ verify 脚本中的数据库查询按 session_key 过滤，避免全表统计
 ```
@@ -370,7 +385,7 @@ class TestTaskVerification:
 | **D3 Initial State 真实性** | REAL | 代码是否使用真实 git 快照，而非简化/摘录版 | 高 |
 | **D4 Verify 脚本正确性** | VERIFY | test_task.py 语法正确、路径匹配、检查项合理 | 高 |
 | **D5 Eval Prompt 质量** | EVAL | 评分维度覆盖核心目标，标准清晰 | 中 |
-| **D6 task.yaml 规范性** | YAML | 字段完整、格式正确、mapping 路径一致 | 中 |
+| **D6 task.yaml 规范性** | YAML | 字段完整、格式正确、**initial_state_mapping 路径映射正确**（key 无 initial_state/ 前缀，value 以 .nanobot/workspace/ 开头，与 verify 脚本路径一致）| 中→高 |
 | **D7 脱敏合规** | SECURITY | 无 API key、真实 ID、密码等敏感信息 | 高 |
 | **D8 .git 体积合理** | GIT_SIZE | .git 目录已精简（orphan branch），无冗余历史 | 低 |
 | **D9 难度匹配** | DIFFICULTY | 标注难度与实际任务复杂度匹配 | 中 |
@@ -530,9 +545,33 @@ git gc --prune=now --aggressive
 
 **⚠️ task.yaml 的 initial_state_mapping 必须与 verify 脚本中的路径一致**
 
-常见错误：
-- task.yaml 映射 `project_code/ → project/`，但 verify 脚本中写死了 `initial_state/project_code/`
-- 实际 eval 运行时，框架会按 mapping 重新组织目录，verify 脚本应使用 `WORKSPACE`/`PROJECT_DIR` 环境变量
+#### runner.py 映射逻辑
+
+```
+容器目录结构：
+  /eval                          ← EVAL_HOME (= $HOME)
+  /eval/.nanobot                 ← NANOBOT_HOME
+  /eval/.nanobot/workspace       ← WORKSPACE（agent 的工作目录）
+
+mapping 执行逻辑（runner.py setup_nanobot_home）：
+  for src_name, dest_rel in initial_state_mapping.items():
+      src_path = TASK_DIR / "initial_state" / src_name   # 源：测例目录下
+      dest_path = EVAL_HOME / dest_rel                    # 目标：/eval/{dest_rel}
+```
+
+#### ⚠️ 高频错误（Batch 4 质检中 5/15 测例犯此错误）
+
+| 错误写法 | 实际效果 | 正确写法 | 实际效果 |
+|---------|---------|---------|---------|
+| `"nanobot_core/": "nanobot_core/"` | → `/eval/nanobot_core/` ❌ | `"nanobot_core/": ".nanobot/workspace/nanobot_core/"` | → `/eval/.nanobot/workspace/nanobot_core/` ✅ |
+| `"web_chat/": "web_chat/"` | → `/eval/web_chat/` ❌ | `"web_chat/": ".nanobot/workspace/web_chat/"` | → `/eval/.nanobot/workspace/web_chat/` ✅ |
+| `"initial_state/project/": "project/"` | key 含 initial_state/ 前缀 ❌ | `"project/": ".nanobot/workspace/project/"` | key 直接是 initial_state 下的目录名 ✅ |
+
+**核心规则**：
+1. **key** = initial_state/ 目录下的子目录名（**不含** `initial_state/` 前缀）
+2. **value** = 相对于 `/eval` 的目标路径（要放到 workspace 下则**必须**以 `.nanobot/workspace/` 开头）
+
+#### verify 脚本中的路径
 
 ```python
 # verify 脚本中的正确写法 — 使用环境变量，不硬编码路径
@@ -541,6 +580,14 @@ PROJECT_DIR = os.environ.get("PROJECT_DIR", os.path.join(WORKSPACE, "project"))
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/eval/results")
 TASK_ID = os.environ.get("TASK_ID", "")
 ```
+
+#### 自检清单
+
+构造完 task.yaml 后，逐项验证：
+- [ ] mapping 的每个 key 在 `initial_state/` 目录下确实存在
+- [ ] mapping 的每个 value 以 `.nanobot/workspace/` 开头（除非有特殊理由放到 workspace 外）
+- [ ] verify 脚本中 `PROJECT_DIR` 的默认值与 mapping value 对应（如 `WORKSPACE + "/nanobot_core"`）
+- [ ] dry-run：在 initial_state 上模拟 mapping 后的路径，verify 脚本能正常执行（fail 因检查不满足，而非路径找不到）
 
 ### 5.5 Query 设计
 
@@ -656,3 +703,19 @@ Session 文件:
 LLM 日志（补充数据源）:
   ~/.nanobot/workspace/llm-logs/                       — 全量 LLM API 数据 dump（按日期分文件）
 ```
+
+### 7.3 Batch 4 经验教训
+
+> 2026-03-12 Batch 4 构造 15 测例 + 质检复盘
+
+**高频问题：initial_state_mapping 路径映射错误（5/15 = 33%）**
+
+- **根因**：Worker 不理解 runner.py 的映射逻辑（`dest_path = EVAL_HOME / dest_rel`），把 value 写成裸目录名（如 `nanobot_core/`），导致文件被放到 `/eval/nanobot_core/` 而非 `/eval/.nanobot/workspace/nanobot_core/`
+- **修复**：本次更新在 §2.2 task.yaml 示例、§3.5 checklist、§5.4 路径映射 三处加入了详细说明和常见错误表
+- **预防**：Worker Prompt 模板中应明确提及 §5.4 的映射规则，或在 checklist 中加粗提醒
+
+**其他发现**：
+- 所有 15 个测例的 D1（原始匹配度）、D3（真实性）、D7（脱敏）均通过 — 说明构造质量基本面良好
+- E 类 easy 实施质检（task-047~052）全部 pass — 说明 easy 难度测例的 verify 脚本设计合理
+- 合成仓库的测例（task-041/042）质检也通过 — 说明合成场景的还原度可接受
+
