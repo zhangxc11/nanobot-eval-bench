@@ -192,25 +192,28 @@ Phase 5: 质检复盘 + 人工修复（主控 session）
 
 ### 4.1 编排模式
 
-遵循 `batch-orchestrator` 的四层编排：
+遵循 `batch-orchestrator` 的两层编排 + 用户 session watchdog：
 
 ```
-主控 session
-  │  读取 MASTER_PROMPT.md（可重入）
-  │  管理全局进度，处理异常
+用户 session
+  │  与用户讨论，产出设计文档和 Prompt
   │
-  ├── 调度 session (gen1)
+  ├── 调度 session（一个，串行执行调度逻辑）
   │     │  读取 DISPATCHER_PROMPT.md
-  │     │  串行处理任务队列
+  │     │  通过 spawn 启动 Worker subagent（滑动窗口并行）
   │     │
-  │     ├── Worker session (task-003)  ← 构造模式
-  │     ├── Worker session (task-004)
-  │     └── ...
+  │     ├── Worker subagent (task-003)  ← 构造模式
+  │     ├── Worker subagent (task-004)
+  │     └── Watchdog subagent（调度级，监控 Worker 超时）
   │
-  ├── 调度 session (gen2)  ← 如果 gen1 迭代耗尽
-  │     └── ...
-  └── ...
+  └── User Watchdog subagent ← sleep N 分钟后回报，触发用户 session 检查
+        └── (follow_up 循环：未完成 → 再 sleep → 再回报 → 再检查)
 ```
+
+**⚠️ 关键约束**：
+- **调度 session 串行，Worker 并行**——不要 spawn 多个 gen-dispatcher 并行调度
+- **Worker subagent 没有 spawn 工具**——Worker 不能创建子 session 或嵌套子任务
+- **User Watchdog 自动接力**——调度 session 迭代耗尽时，user watchdog 回报触发用户 session 自动启动新调度（见 batch-orchestrator §7）
 
 ### 4.2 调度 session 职责
 
@@ -219,16 +222,17 @@ Phase 5: 质检复盘 + 人工修复（主控 session）
 ```
 职责:
 1. 读取 state.json，找到 status=pending 的任务
-2. 逐个启动 Worker session（通过 curl web-subsession API）
-3. 轮询 Worker 的 result 文件（检查 reports/task-{NNN}.json）
-4. 收集结果，更新 state.json
-5. 处理 Worker 卡住的情况（发送恢复消息）
-6. 达到 budget 后停止，汇报进度
+2. 通过 spawn 启动 Worker subagent（滑动窗口，并发 3~5 个）
+3. 被动接收 Worker 回报（spawn 完成后自动回报）
+4. 更新 state.json
+5. 异常恢复（follow_up）
+6. 启动 watchdog subagent 做超时兜底
 
 不做:
 - 不自己构造测例（即使是 easy 任务）
 - 不修改 CASE_REGISTRY.md
 - 不做质检
+- 不 spawn gen-dispatcher subagent（调度本身串行执行）
 ```
 
 ### 4.3 Worker session 执行
@@ -320,13 +324,13 @@ Worker 完成后写入 `reports/task-{NNN}.json`。
 与 Phase 2 相同的编排模式，但 Worker 使用质检模式：
 
 ```
-主控 session
-  ├── 调度 session (qa_gen1)
-  │     ├── QA Worker (task-003)  ← 质检模式
-  │     ├── QA Worker (task-004)
-  │     └── ...
+调度 session（一个，串行执行调度逻辑）
+  ├── QA Worker subagent (task-003)  ← 质检模式
+  ├── QA Worker subagent (task-004)
   └── ...
 ```
+
+**⚠️ 同样遵循"调度串行，Worker 并行"原则**——不要 spawn 多个 gen-QA subagent 并行调度。
 
 每个 QA Worker 收到的消息包含：
 - 待质检的 task 信息
@@ -387,12 +391,17 @@ QA Worker 完成后写入 `qa_reports/task-{NNN}_qa.json`。
 Gen3~Gen5 中调度 session 混合了"自己构造 easy 任务"和"启动 worker"两种模式，
 导致迭代次数不够。改为纯调度后，100 次迭代可管理 15-20 个 Worker。
 
-**⚠️ 串行启动，不要并行启动太多 Worker**
+**⚠️ 调度串行，Worker 并行**
 
-一次启动 5+ 个 Worker 会导致：
-- 调度 session 轮询压力大
-- 系统资源竞争
-- 推荐：串行启动，每个 Worker 启动后等待一小段时间再启动下一个
+- 一个调度 session 管理所有 Worker，通过滑动窗口并行 spawn
+- ❌ 不要 spawn 多个 gen-dispatcher subagent 并行调度（subagent 没有 spawn 工具，会降级为 curl 创建 web-subsession，导致命名混乱和父子关系丢失）
+- 如果调度 session 迭代耗尽，由用户 session 启动新调度 session 接力
+
+**⚠️ Worker subagent 不创建子 session**
+
+Worker subagent 只有 7 个基础工具（read_file/write_file/edit_file/list_dir/exec/web_search/web_fetch），
+没有 spawn/message/cron。Worker 不应通过 curl 创建 web-subsession——如果需要子任务，
+说明架构设计有问题，应由调度 session 拆分为多个独立 Worker。
 
 ### 8.2 Worker 健壮性
 
@@ -502,22 +511,29 @@ curl --max-time 5 -X POST http://localhost:8082/api/execute-stream \
 
 ## 状态文件
 - `{work_dir}/state.json` — 任务状态
+- `{work_dir}/TASK_PLAN.md` — 任务计划（每个 task 的具体要求）
+- `{work_dir}/WORKER_PROMPT_TEMPLATE.md` — Worker Prompt 模板
 
 ## 执行流程
 1. 读取 state.json，找到 status=pending 的任务
-2. 逐个启动 Worker session:
-   - 用 WORKER_PROMPT_TEMPLATE 生成消息
-   - 通过 curl 启动 web-subsession
-3. 轮询 Worker 的 result 文件
-4. 更新 state.json
-5. 达到 budget 后停止
+2. 通过 spawn 启动 Worker subagent（滑动窗口，并发 3~5 个）
+3. 启动 watchdog subagent 做超时兜底
+4. 被动等待 Worker/watchdog 回报
+5. 更新 state.json
+6. 异常恢复（follow_up）
+7. 达到 budget 后停止
 
-## Worker 启动方式
-```bash
-curl --max-time 5 -X POST http://localhost:8082/api/execute-stream \
-  -H 'Content-Type: application/json' \
-  -d '{"session_key":"webchat:{role}_{dispatch_ts}_{task_id}","message":"..."}'
-```
+## Worker 启动方式（spawn）
+对每个 pending 任务：
+1. 从 TASK_PLAN.md 获取该任务的具体要求
+2. 用 WORKER_PROMPT_TEMPLATE.md 填充生成 Worker Prompt
+3. spawn Worker subagent，记录返回的 task_id
+4. 更新 state.json：pending → in_progress
+
+## ⚠️ 重要约束
+- **不要 spawn gen-dispatcher subagent**——你自己就是调度，串行执行调度逻辑
+- **Worker subagent 没有 spawn 工具**——不要期望 Worker 能创建子任务
+- 每次收到回报后，**立即更新 state.json**
 
 ## Budget
 每代最多处理 {N} 个任务。处理完后汇报进度并停止。
