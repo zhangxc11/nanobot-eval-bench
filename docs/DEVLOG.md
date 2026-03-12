@@ -529,8 +529,11 @@
 - [x] 10.3.2 task-032 验证：为其 task.yaml 添加 `project_dir` 字段，确认 PROJECT_DIR 正确
 
 #### 10.4 Git 提交
-- [ ] 10.4.1 eval-bench 仓库提交
-- [ ] 10.4.2 eval-bench-data 仓库提交（task-032 task.yaml 更新）
+- [x] 10.4.1 eval-bench 仓库提交 → `a040996` + `3215419`，已推送
+- [x] 10.4.2 eval-bench-data 仓库提交 → `553afd3`（本地，远程仓库待确认）
+
+### 完成时间
+- 2026-03-12 15:38
 
 ### 涉及文件
 
