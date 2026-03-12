@@ -73,10 +73,15 @@ max_iterations: 30        # agent 最大迭代次数
 #
 # 因此 value 必须以 ".nanobot/workspace/" 为前缀才能放到 agent workspace 下！
 # 常见错误：写成 "nanobot_core/" 会放到 /eval/nanobot_core/（workspace 外面）
+#
+# ⚠️ PROJECT_DIR 约束（runner.py 三级优先级）：
+# 如果 verify 脚本依赖 PROJECT_DIR 环境变量，推荐在 task.yaml 中使用
+# 顶层 project_dir 字段显式声明路径。也可在 mapping 中使用 project_code key。
+# 详见 §5.8。
 initial_state_mapping:
+  "project_code/": ".nanobot/workspace/project/{project_name}/"
   "skills/": ".nanobot/workspace/skills/"
   "memory/": ".nanobot/workspace/memory/"
-  "{project_dir}/": ".nanobot/workspace/{project_dir}/"
 
 # 验证配置 — 必须使用 verify_script
 verify_script: "verify/test_task.py"
@@ -159,7 +164,7 @@ class TestTaskVerification:
 | `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
 | `TASK_ID` | task.yaml 中的 id | 任务 ID（如 `task-001`） |
 | `TASK_NAME` | task.yaml 中的 name | 任务名称 |
-| `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录。runner.py 逻辑：若 mapping 有 `project_code` key 则 `EVAL_HOME/{value}`；否则自动查找 `WORKSPACE/project` 或 `WORKSPACE/project_code`。verify 脚本应设 fallback 默认值 |
+| `PROJECT_DIR` | 由 task.yaml 决定 | 项目代码目录。runner.py 三级优先级：1) `project_dir` 字段 → `EVAL_HOME/{value}`；2) mapping 中 `project_code` key；3) fallback 目录探测。详见 §5.8。verify 脚本应设 fallback 默认值 |
 
 ### 2.5 eval_prompt.md 结构
 
@@ -354,6 +359,8 @@ class TestTaskVerification:
   - key 不含 `initial_state/` 前缀
   - value 以 `.nanobot/workspace/` 开头（放到 agent workspace 下）
   - verify 脚本中 PROJECT_DIR 默认值与 mapping value 对应
+□ **PROJECT_DIR 约束**（见 §5.8）：如果 verify 脚本使用 PROJECT_DIR 环境变量，
+  推荐在 task.yaml 中添加顶层 `project_dir` 字段，或确保 mapping 中包含 `project_code` key
 □ 需要 git 仓库的测例：预构建完整仓库（含 .git + 所有分支），通过 initial_state_mapping 直接复制
 □ verify 脚本中的数据库查询按 session_key 过滤，避免全表统计
 ```
@@ -385,7 +392,7 @@ class TestTaskVerification:
 | **D3 Initial State 真实性** | REAL | 代码是否使用真实 git 快照，而非简化/摘录版 | 高 |
 | **D4 Verify 脚本正确性** | VERIFY | test_task.py 语法正确、路径匹配、检查项合理 | 高 |
 | **D5 Eval Prompt 质量** | EVAL | 评分维度覆盖核心目标，标准清晰 | 中 |
-| **D6 task.yaml 规范性** | YAML | 字段完整、格式正确、**initial_state_mapping 路径映射正确**（key 无 initial_state/ 前缀，value 以 .nanobot/workspace/ 开头，与 verify 脚本路径一致）| 中→高 |
+| **D6 task.yaml 规范性** | YAML | 字段完整、格式正确、**initial_state_mapping 路径映射正确**（key 无 initial_state/ 前缀，value 以 .nanobot/workspace/ 开头，与 verify 脚本路径一致）、**verify 依赖 PROJECT_DIR 时需有 `project_dir` 字段或 `project_code` mapping key**（§5.8）| 中→高 |
 | **D7 脱敏合规** | SECURITY | 无 API key、真实 ID、密码等敏感信息 | 高 |
 | **D8 .git 体积合理** | GIT_SIZE | .git 目录已精简（orphan branch），无冗余历史 | 低 |
 | **D9 难度匹配** | DIFFICULTY | 标注难度与实际任务复杂度匹配 | 中 |
@@ -587,6 +594,7 @@ TASK_ID = os.environ.get("TASK_ID", "")
 - [ ] mapping 的每个 key 在 `initial_state/` 目录下确实存在
 - [ ] mapping 的每个 value 以 `.nanobot/workspace/` 开头（除非有特殊理由放到 workspace 外）
 - [ ] verify 脚本中 `PROJECT_DIR` 的默认值与 mapping value 对应（如 `WORKSPACE + "/nanobot_core"`）
+- [ ] **如果 verify 脚本使用 `PROJECT_DIR`，task.yaml 中需有 `project_dir` 字段或 mapping 中有 `project_code` key**（见 §5.8）
 - [ ] dry-run：在 initial_state 上模拟 mapping 后的路径，verify 脚本能正常执行（fail 因检查不满足，而非路径找不到）
 
 ### 5.5 Query 设计
@@ -616,6 +624,57 @@ TASK_ID = os.environ.get("TASK_ID", "")
 | 低 | 做出判断并继续，简要记录 | 目录命名；README 内容 |
 
 **关键原则：任何决策点都不能静默忽略，最终需要人工确认。**
+
+### 5.8 PROJECT_DIR 环境变量与 `project_dir` 字段
+
+> 来源：task-032 评测反馈（2026-03-12）。因 mapping 使用 `nanobot_repo` 而非 `project_code` 作为 key，
+> 导致 runner.py 走入 fallback 逻辑，`PROJECT_DIR` 被错误设为父目录，27/30 测试误判 FAIL。
+> **已修复**：runner.py 新增 `project_dir` 字段支持（Phase 10, R10.6）。
+
+**runner.py 当前逻辑**（三级优先级）：
+
+```python
+# 优先级 1: task.yaml 显式 project_dir 字段（推荐）
+project_dir_value = task.get("project_dir")
+if project_dir_value:
+    env["PROJECT_DIR"] = str(EVAL_HOME / project_dir_value)
+
+# 优先级 2: mapping 中的 project_code key（向后兼容）
+elif "project_code" in mapping:
+    env["PROJECT_DIR"] = str(EVAL_HOME / mapping["project_code"])
+
+# 优先级 3: fallback 目录探测（不推荐依赖，可能指向错误目录）
+else:
+    for candidate in ["project", "project_code"]:
+        ...
+```
+
+**推荐做法**：在 task.yaml 中使用 `project_dir` 字段显式声明项目目录：
+
+```yaml
+# ✅ 推荐：使用 project_dir 字段
+project_dir: ".nanobot/workspace/project/nanobot"
+
+initial_state_mapping:
+  nanobot_repo: ".nanobot/workspace/project/nanobot"
+  memory: ".nanobot/workspace/memory"
+```
+
+```yaml
+# ✅ 也可以：mapping 中使用 project_code key（向后兼容）
+initial_state_mapping:
+  project_code: ".nanobot/workspace/project/nanobot"
+  memory: ".nanobot/workspace/memory"
+```
+
+```yaml
+# ❌ 错误：mapping 中没有 project_code key，也没有 project_dir 字段
+initial_state_mapping:
+  nanobot_repo: ".nanobot/workspace/project/nanobot"
+  memory: ".nanobot/workspace/memory"
+```
+
+**影响范围**：所有 verify 脚本中使用 `os.environ.get("PROJECT_DIR")` 的测例。
 
 ---
 

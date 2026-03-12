@@ -126,3 +126,15 @@
 
 - 暂不在框架内实现自动 LLM 评分模型切换
 - 当前策略：事后人工评分，不在任务执行时使用 LLM 打分
+
+### R10.6 task.yaml 显式 `project_dir` 字段（P1）
+
+> 来源：task-032 评测反馈（2026-03-12）
+
+- **问题**：runner.py 设置 `PROJECT_DIR` 环境变量时硬编码只认 `initial_state_mapping` 中名为 `project_code` 的 key。mapping 用其他 key 名（如 `nanobot_repo`）时走入 fallback，可能指向错误的父目录，导致 verify 脚本大面积误判 FAIL
+- **方案**：task.yaml 新增顶层可选字段 `project_dir`，显式声明项目目录路径（相对于 EVAL_HOME）
+- **runner.py 修改**：
+  1. `_run_pytest()` 中设置 PROJECT_DIR 的优先级：`project_dir` 字段 > `project_code` mapping key > fallback 目录探测
+  2. `collect_metrics()` 中 count_dirs 的逻辑同步更新
+- **TASK_SPEC.md 更新**：新增 `project_dir` 字段说明
+- **向后兼容**：无 `project_dir` 字段时走原有逻辑，已有测例不受影响

@@ -13,7 +13,7 @@ Two task types:
   - initial_state files map to workspace/ by default
 - Type B (code_modification): Modify nanobot/webchat source code
   - initial_state_mapping controls precise file placement
-  - project_code contains git-snapshot of nanobot source at specific commit
+  - project_dir field (or project_code mapping key) sets PROJECT_DIR for verify scripts
   - verify_script runs pytest on modified code
 
 Mock provider naming:
@@ -433,9 +433,13 @@ def _run_pytest(script_path: Path, task: dict) -> dict:
         "TASK_NAME": task.get("name", ""),
     }
 
-    # Set PROJECT_DIR if initial_state_mapping has project_code
+    # Set PROJECT_DIR for verify scripts
+    # Priority: 1) explicit project_dir field  2) project_code mapping key  3) fallback
+    project_dir_value = task.get("project_dir")
     mapping = task.get("initial_state_mapping", {})
-    if "project_code" in mapping:
+    if project_dir_value:
+        env["PROJECT_DIR"] = str(EVAL_HOME / project_dir_value)
+    elif "project_code" in mapping:
         env["PROJECT_DIR"] = str(EVAL_HOME / mapping["project_code"])
     else:
         # Try common project directory paths
@@ -575,8 +579,11 @@ def collect_metrics(start_time: float, task: dict) -> RunMetrics:
 
     # Count files in relevant directories
     count_dirs = []
+    project_dir_value = task.get("project_dir")
     mapping = task.get("initial_state_mapping", {})
-    if "project_code" in mapping:
+    if project_dir_value:
+        count_dirs.append(EVAL_HOME / project_dir_value)
+    elif "project_code" in mapping:
         count_dirs.append(EVAL_HOME / mapping["project_code"])
     else:
         doubao_dir = WORKSPACE / "skills" / "doubao-search"

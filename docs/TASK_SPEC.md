@@ -67,9 +67,14 @@ resource_limits:
   max_tool_calls: 150
   timeout_minutes: 30
 
+# Type B 专用: 显式声明项目目录（推荐）
+# 路径相对于 EVAL_HOME（/eval），runner.py 用此设置 PROJECT_DIR 环境变量
+# 优先级：project_dir > initial_state_mapping 中的 project_code key > fallback 探测
+project_dir: ".nanobot/workspace/project/nanobot"
+
 # Type B 专用: 文件映射
 initial_state_mapping:
-  project_code: ".nanobot/workspace/project/nanobot"
+  nanobot_repo: ".nanobot/workspace/project/nanobot"
   skills: ".nanobot/workspace/skills"
   memory: ".nanobot/workspace/memory"
 
@@ -160,7 +165,7 @@ pytest 脚本通过环境变量获取路径：
 | `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
 | `TASK_ID` | task.yaml 中的 id | 任务 ID |
 | `TASK_NAME` | task.yaml 中的 name | 任务名称 |
-| `PROJECT_DIR` | 由 initial_state_mapping 决定 | 项目代码目录（Type B） |
+| `PROJECT_DIR` | 由 task.yaml 决定 | 项目代码目录（Type B）。优先级：`project_dir` 字段 > `project_code` mapping key > fallback 探测 |
 
 ## 分类列表
 

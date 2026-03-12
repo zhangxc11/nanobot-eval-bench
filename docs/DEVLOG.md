@@ -501,3 +501,44 @@
 
 ### 完成时间
 - 2026-03-09 16:25
+
+---
+
+## Phase 10: R10.6 — task.yaml 显式 `project_dir` 字段 (2026-03-12)
+
+### 背景
+- task-032 评测反馈：mapping 用 `nanobot_repo` 而非 `project_code` 作为 key，runner.py fallback 指向错误的父目录，27/30 测试误判 FAIL
+- 方案 B：task.yaml 新增顶层 `project_dir` 字段，显式声明项目目录路径
+
+### 任务清单
+
+#### 10.1 runner.py 修改
+- [x] 10.1.1 `_run_pytest()`: PROJECT_DIR 设置逻辑改为三级优先级
+  - 优先级 1: `task.get("project_dir")` → `EVAL_HOME / project_dir`
+  - 优先级 2: `mapping["project_code"]` → `EVAL_HOME / mapping["project_code"]`（向后兼容）
+  - 优先级 3: fallback 目录探测（原逻辑不变）
+- [x] 10.1.2 `collect_metrics()`: count_dirs 逻辑同步更新，增加 `project_dir` 字段优先级
+- [x] 10.1.3 文件头注释更新：Type B 说明中提及 `project_dir` 字段
+
+#### 10.2 文档更新
+- [x] 10.2.1 TASK_SPEC.md: task.yaml 字段说明新增 `project_dir`，环境变量表更新
+- [x] 10.2.2 eval-task-builder SKILL.md: 更新 §5.8 说明框架已支持 `project_dir` 字段
+
+#### 10.3 兼容性验证
+- [x] 10.3.1 已有测例兼容性检查：所有已有 task.yaml 无 `project_dir` 字段，走原逻辑不受影响
+- [x] 10.3.2 task-032 验证：为其 task.yaml 添加 `project_dir` 字段，确认 PROJECT_DIR 正确
+
+#### 10.4 Git 提交
+- [ ] 10.4.1 eval-bench 仓库提交
+- [ ] 10.4.2 eval-bench-data 仓库提交（task-032 task.yaml 更新）
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `platform/runner.py` | PROJECT_DIR 设置 + count_dirs 逻辑 + 头注释 |
+| `docs/TASK_SPEC.md` | 新增 project_dir 字段说明 |
+| `docs/REQUIREMENTS.md` | R10.6 已记录 |
+| `docs/DEVLOG.md` | Phase 10 |
+| `eval-task-builder SKILL.md` | §5.8 更新 |
+| `eval-bench-data: task-032 task.yaml` | 添加 project_dir 字段 |
