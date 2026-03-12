@@ -1,5 +1,42 @@
 # eval-bench 开发日志
 
+## Phase 11: Skill SKILL.md 篇幅压缩 (2026-03-12)
+
+### 背景
+- 4 个 Skill 的 SKILL.md 合计 2548 行，每次 agent 启动时全部加载到上下文，占用过多 token
+- 需要压缩主文件篇幅，将详细内容挪到 docs/ 子目录，SKILL.md 只保留核心架构和索引链接
+
+### 任务清单
+
+#### 11.1 eval-session-scanner SKILL.md 压缩
+- [x] 343 → 163 行（-52%），新建 docs/CLASSIFICATION.md (131 行)
+
+#### 11.2 eval-task-builder SKILL.md 压缩
+- [x] 780 → 182 行（-77%），新建 docs/TASK_FORMAT_DETAIL.md + BUILD_GUIDE.md + QA_GUIDE.md + PROJECT_DIR.md
+
+#### 11.3 eval-task-batch-builder SKILL.md 压缩 + 更新 spawn 模式
+- [x] 653 → 151 行（-77%），新建 docs/PHASE_DETAIL.md + PROMPTS.md + EXPERIENCE.md
+- [x] 统一为 spawn 两层模式：去掉"四层编排"/"主控 session"/"web-subsession Worker"
+
+#### 11.4 eval-framework-maintainer 跳过
+- [x] 76 行，已够短，无需压缩
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| skills/eval-session-scanner/SKILL.md | 压缩重写 |
+| skills/eval-session-scanner/docs/CLASSIFICATION.md | 新建 |
+| skills/eval-task-builder/SKILL.md | 压缩重写 |
+| skills/eval-task-builder/docs/{TASK_FORMAT_DETAIL,BUILD_GUIDE,QA_GUIDE,PROJECT_DIR}.md | 新建 |
+| skills/eval-task-batch-builder/SKILL.md | 压缩重写 + spawn 模式更新 |
+| skills/eval-task-batch-builder/docs/{PHASE_DETAIL,PROMPTS,EXPERIENCE}.md | 新建 |
+
+### 完成时间
+- 2026-03-12
+
+---
+
 ## Phase 10: Volcengine 评测反馈修复 (2026-03-11)
 
 ### 背景
