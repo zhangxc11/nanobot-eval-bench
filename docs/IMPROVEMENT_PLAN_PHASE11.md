@@ -60,40 +60,40 @@ initial_state_mapping:
 ### 受影响测例刷新清单
 
 需要修改 project_dir 的（错误值）：
-- [ ] task-039: `nanobot_core` → `.nanobot/workspace/nanobot_core`
-- [ ] task-041: `taskrunner_project` → `.nanobot/workspace/taskrunner_project`
+- [x] task-039: `nanobot_core` → `.nanobot/workspace/nanobot_core`
+- [x] task-041: `taskrunner_project` → `.nanobot/workspace/taskrunner_project`
 
 需要新增 project_dir 的（当前缺失）：
-- [ ] task-002: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
-- [ ] task-004: 添加 `project_dir: ".nanobot/workspace/project"`
-- [ ] task-011: 添加 `project_dir: ".nanobot/workspace/project/web-chat"`
-- [ ] task-012: 添加 `project_dir: ".nanobot/workspace/web-chat"`
-- [ ] task-013: 添加 `project_dir: ".nanobot/workspace/project"`
-- [ ] task-014: 添加 `project_dir: ".nanobot/workspace/web-chat"`
-- [ ] task-015: 添加 `project_dir: ".nanobot/workspace/web-chat"`
-- [ ] task-017: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
-- [ ] task-018: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
-- [ ] task-020: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
-- [ ] task-021: 添加 `project_dir: ".nanobot/workspace/web-chat"`
-- [ ] task-023: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-024: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-035: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
-- [ ] task-036: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-037: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-038: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-040: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-043: 需确认 verify 脚本是否用 PROJECT_DIR
-- [ ] task-046: 非 code_modification，跳过
-- [ ] task-047: 已有正确 project_dir
-- [ ] task-050: 已有正确 project_dir
+- [x] task-002: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
+- [x] task-004: 添加 `project_dir: ".nanobot/workspace/project"`
+- [x] task-011: 添加 `project_dir: ".nanobot/workspace/project/web-chat"`
+- [x] task-012: 添加 `project_dir: ".nanobot/workspace/web-chat"`
+- [x] task-013: 添加 `project_dir: ".nanobot/workspace/project"`
+- [x] task-014: 添加 `project_dir: ".nanobot/workspace/web-chat"`
+- [x] task-015: 添加 `project_dir: ".nanobot/workspace/web-chat"`
+- [x] task-017: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
+- [x] task-018: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
+- [x] task-020: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
+- [x] task-021: 添加 `project_dir: ".nanobot/workspace/web-chat"`
+- [x] task-023: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-024: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-035: 添加 `project_dir: ".nanobot/workspace/project/nanobot"`
+- [x] task-036: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-037: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-038: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-040: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-043: 需确认 verify 脚本是否用 PROJECT_DIR
+- [x] task-046: 非 code_modification，跳过
+- [x] task-047: 已有正确 project_dir
+- [x] task-050: 已有正确 project_dir
 
 ### 进展
-- [ ] 11.1.1 runner.py PROJECT_DIR 逻辑简化 + 容错
-- [ ] 11.1.2 TASK_SPEC.md 更新 project_dir 说明
-- [ ] 11.1.3 eval-task-builder skill 文档更新
-- [ ] 11.1.4 全量测例 project_dir 刷新
-- [ ] 11.1.5 质检脚本 project_dir 校验
-- [ ] 11.1.6 Git 提交 eval-bench + eval-bench-data
+- [x] 11.1.1 runner.py PROJECT_DIR 逻辑简化 + 容错
+- [x] 11.1.2 TASK_SPEC.md 更新 project_dir 说明
+- [x] 11.1.3 eval-task-builder skill 文档更新
+- [x] 11.1.4 全量测例 project_dir 刷新
+- [x] 11.1.5 质检脚本 project_dir 校验
+- [x] 11.1.6 Git 提交 eval-bench + eval-bench-data
 
 ---
 
@@ -121,10 +121,10 @@ RUN pip install --no-cache-dir pytest pyyaml pytest-json-report pytest-asyncio
 - 更新 TASK_SPEC.md 中的 mock 模板说明
 
 ### 进展
-- [ ] 11.2.1 Dockerfile.base 添加 Node.js + pytest-asyncio
-- [ ] 11.2.2 mock start.sh 模板更新
-- [ ] 11.2.3 TASK_SPEC.md mock 说明更新
-- [ ] 11.2.4 Git 提交
+- [x] 11.2.1 Dockerfile.base 添加 Node.js + pytest-asyncio
+- [x] 11.2.2 mock start.sh 模板更新
+- [x] 11.2.3 TASK_SPEC.md mock 说明更新
+- [x] 11.2.4 Git 提交
 
 ---
 
@@ -145,10 +145,10 @@ RUN pip install --no-cache-dir pytest pyyaml pytest-json-report pytest-asyncio
 - 权重调整：诊断 30% + 功能修复 40% + 内存安全 15% + 兼容 15%
 
 ### 进展
-- [ ] 11.3.1 重写 query.md
-- [ ] 11.3.2 重写 verify 脚本
-- [ ] 11.3.3 更新 task.yaml eval_dimensions
-- [ ] 11.3.4 Git 提交
+- [x] 11.3.1 重写 query.md
+- [x] 11.3.2 重写 verify 脚本
+- [x] 11.3.3 更新 task.yaml eval_dimensions
+- [x] 11.3.4 Git 提交
 
 ---
 
@@ -177,10 +177,10 @@ RUN pip install --no-cache-dir pytest pyyaml pytest-json-report pytest-asyncio
 - 核心检查：Message 类型定义包含 system 角色 + 有对应渲染组件
 
 ### 进展
-- [ ] 11.4.1 task-043 verify 改进
-- [ ] 11.4.2 task-048 verify 改进
-- [ ] 11.4.3 task-051 verify 改进
-- [ ] 11.4.4 Git 提交
+- [x] 11.4.1 task-043 verify 改进
+- [x] 11.4.2 task-048 verify 改进
+- [x] 11.4.3 task-051 verify 改进
+- [x] 11.4.4 Git 提交
 
 ---
 
@@ -199,6 +199,6 @@ RUN pip install --no-cache-dir pytest pyyaml pytest-json-report pytest-asyncio
 生成报告时自动标注为"需人工审查"。
 
 ### 进展
-- [ ] 11.5.1 质检脚本编写
-- [ ] 11.5.2 verify_notes 机制（可选，视时间）
-- [ ] 11.5.3 Git 提交
+- [x] 11.5.1 质检脚本编写
+- [x] 11.5.2 verify_notes 机制（可选，视时间）
+- [x] 11.5.3 Git 提交
