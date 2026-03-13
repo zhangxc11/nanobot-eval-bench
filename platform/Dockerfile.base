@@ -22,6 +22,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# ─── Node.js 20.x LTS（前端测例需要）─────────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version && npm --version
+
 # ─── nanobot 的 Python 依赖（不装 nanobot 本身）─────────
 # 从 pyproject.toml 提取的 dependencies，提前安装以加速后续构建
 # 版本范围与 nanobot pyproject.toml 保持一致
@@ -35,9 +41,9 @@ RUN if [ -n "$PIP_INDEX_URL" ]; then \
 
 # ─── 评测框架依赖 ──────────────────────────────────────
 RUN if [ -n "$PIP_INDEX_URL" ]; then \
-        pip install --no-cache-dir -i "$PIP_INDEX_URL" pytest pyyaml pytest-json-report; \
+        pip install --no-cache-dir -i "$PIP_INDEX_URL" pytest pyyaml pytest-json-report pytest-asyncio; \
     else \
-        pip install --no-cache-dir pytest pyyaml pytest-json-report; \
+        pip install --no-cache-dir pytest pyyaml pytest-json-report pytest-asyncio; \
     fi
 
 # ─── 清理 build 工具（减小镜像体积）───────────────────
@@ -46,5 +52,6 @@ RUN apt-get purge -y build-essential && apt-get autoremove -y \
 
 # ─── 验证关键依赖 ──────────────────────────────────────
 RUN python3 -c "import litellm; import pydantic; import httpx; import typer; print('All deps OK')"
+RUN node --version && npm --version && echo "Node.js OK"
 
 WORKDIR /eval

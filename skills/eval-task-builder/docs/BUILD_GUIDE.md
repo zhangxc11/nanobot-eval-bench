@@ -173,8 +173,11 @@
   - key 不含 `initial_state/` 前缀
   - value 以 `.nanobot/workspace/` 开头（放到 agent workspace 下）
   - verify 脚本中 PROJECT_DIR 默认值与 mapping value 对应
-□ **PROJECT_DIR 约束**（见 docs/PROJECT_DIR.md）：如果 verify 脚本使用 PROJECT_DIR 环境变量，
-  推荐在 task.yaml 中添加顶层 `project_dir` 字段，或确保 mapping 中包含 `project_code` key
+□ **PROJECT_DIR 约束**（Type B 必填）：
+  - task.yaml 必须有 `project_dir` 字段（唯一设置 PROJECT_DIR 的方式）
+  - 值必须以 `.nanobot/workspace/` 开头
+  - 值必须与 initial_state_mapping 中某个 value 一致或是其子路径
+  - verify 脚本中 PROJECT_DIR fallback 值必须与 task.yaml project_dir 一致
 □ 需要 git 仓库的测例：预构建完整仓库（含 .git + 所有分支），通过 initial_state_mapping 直接复制
 □ verify 脚本中的数据库查询按 session_key 过滤，避免全表统计
 ```

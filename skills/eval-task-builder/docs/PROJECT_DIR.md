@@ -1,70 +1,72 @@
 # PROJECT_DIR 环境变量详解
 
-> 本文件详细说明 PROJECT_DIR 环境变量的 runner.py 逻辑、推荐用法和常见错误。
-> 来源：task-032 评测反馈（2026-03-12）。
+> 本文件详细说明 PROJECT_DIR 环境变量的 runner.py 逻辑和使用规范。
+> 更新于 Phase 11（2026-03-13）：简化为唯一方式 + 容错兜底。
 
 ---
 
 ## 背景
 
-因 mapping 使用 `nanobot_repo` 而非 `project_code` 作为 key，
-导致 runner.py 走入 fallback 逻辑，`PROJECT_DIR` 被错误设为父目录，27/30 测试误判 FAIL。
-**已修复**：runner.py 新增 `project_dir` 字段支持（Phase 10, R10.6）。
+Phase 10 引入 `project_dir` 字段时保留了三级优先级（project_dir > project_code key > fallback），
+导致构造者仍容易写错（把 mapping key 误写为 project_dir 值）。
+**Phase 11 简化**：`project_dir` 字段为唯一设置 PROJECT_DIR 的方式，废弃其他路径。
 
 ---
 
-## runner.py 当前逻辑（三级优先级）
+## runner.py 当前逻辑（Phase 11）
 
 ```python
-# 优先级 1: task.yaml 显式 project_dir 字段（推荐）
+# 唯一方式: task.yaml 的 project_dir 字段
 project_dir_value = task.get("project_dir")
 if project_dir_value:
-    env["PROJECT_DIR"] = str(EVAL_HOME / project_dir_value)
-
-# 优先级 2: mapping 中的 project_code key（向后兼容）
-elif "project_code" in mapping:
-    env["PROJECT_DIR"] = str(EVAL_HOME / mapping["project_code"])
-
-# 优先级 3: fallback 目录探测（不推荐依赖，可能指向错误目录）
-else:
-    for candidate in ["project", "project_code"]:
-        ...
+    candidate = EVAL_HOME / project_dir_value
+    if candidate.exists():
+        env["PROJECT_DIR"] = str(candidate)
+    elif project_dir_value in mapping:
+        # 容错: 误写了 mapping key，自动修正 + WARNING
+        resolved = EVAL_HOME / mapping[project_dir_value]
+        env["PROJECT_DIR"] = str(resolved)
+        print(f"WARNING: project_dir is a mapping key, auto-resolved")
+    else:
+        env["PROJECT_DIR"] = str(candidate)
+        print(f"WARNING: project_dir does not exist")
+# 不再支持 project_code key 推导和 fallback 探测
 ```
 
 ---
 
-## 推荐做法
+## 规范要求
 
-在 task.yaml 中使用 `project_dir` 字段显式声明项目目录：
-
-```yaml
-# ✅ 推荐：使用 project_dir 字段
-project_dir: ".nanobot/workspace/project/nanobot"
-
-initial_state_mapping:
-  nanobot_repo: ".nanobot/workspace/project/nanobot"
-  memory: ".nanobot/workspace/memory"
-```
+### task.yaml 必须
 
 ```yaml
-# ✅ 也可以：mapping 中使用 project_code key（向后兼容）
+# ✅ 正确：project_dir = mapping 的 value（完整路径）
+project_dir: ".nanobot/workspace/nanobot_core"
+
 initial_state_mapping:
-  project_code: ".nanobot/workspace/project/nanobot"
-  memory: ".nanobot/workspace/memory"
+  "nanobot_core": ".nanobot/workspace/nanobot_core"
 ```
+
+### 约束条件
+
+1. 所有 `type: code_modification` 测例 **必须** 有 `project_dir` 字段
+2. 值 **必须** 以 `.nanobot/workspace/` 开头
+3. 值 **必须** 与 `initial_state_mapping` 中某个 value 一致或是其子路径
+4. verify 脚本的 PROJECT_DIR fallback 值 **必须** 与 task.yaml project_dir 一致
+
+### 常见错误
 
 ```yaml
-# ❌ 错误：mapping 中没有 project_code key，也没有 project_dir 字段
+# ❌ 错误：写了 mapping 的 key 而非 value
+project_dir: "nanobot_core"   # 应为 ".nanobot/workspace/nanobot_core"
+
+# ❌ 错误：缺少 .nanobot/workspace/ 前缀
+project_dir: "project/nanobot"  # 应为 ".nanobot/workspace/project/nanobot"
+
+# ❌ 错误：没有 project_dir 字段（Phase 11 后不再自动推导）
 initial_state_mapping:
-  nanobot_repo: ".nanobot/workspace/project/nanobot"
-  memory: ".nanobot/workspace/memory"
+  project_code: ".nanobot/workspace/project"
 ```
-
----
-
-## 影响范围
-
-所有 verify 脚本中使用 `os.environ.get("PROJECT_DIR")` 的测例。
 
 ---
 
@@ -77,9 +79,18 @@ initial_state_mapping:
 ```
 
 `project_dir` 字段的值是相对于 EVAL_HOME 的路径，因此：
-- `project_dir: ".nanobot/workspace/project/nanobot"` → `PROJECT_DIR=/eval/.nanobot/workspace/project/nanobot`
+- `project_dir: ".nanobot/workspace/nanobot_core"` → `PROJECT_DIR=/eval/.nanobot/workspace/nanobot_core`
 
 verify 脚本中应设 fallback 默认值：
 ```python
-PROJECT_DIR = os.environ.get("PROJECT_DIR", os.path.join(WORKSPACE, "project/nanobot"))
+PROJECT_DIR = os.environ.get("PROJECT_DIR", os.path.join(WORKSPACE, "nanobot_core"))
+```
+
+---
+
+## 质检脚本
+
+使用 `scripts/check_project_dir.sh` 自动校验所有测例：
+```bash
+bash scripts/check_project_dir.sh [tasks_dir]
 ```

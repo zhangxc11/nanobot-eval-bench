@@ -68,8 +68,9 @@ initial_state_mapping:
   "project_code/": ".nanobot/workspace/project/{name}/"
   "skills/": ".nanobot/workspace/skills/"
 
-# ⚠️ PROJECT_DIR：verify 脚本依赖此变量时，推荐显式声明（详见 docs/PROJECT_DIR.md）
-# 优先级：1) project_dir 字段 → 2) mapping 中 project_code key → 3) fallback 探测
+# ⚠️ PROJECT_DIR（Type B 必填）：
+# 值 = 相对于 EVAL_HOME 的完整路径，必须以 .nanobot/workspace/ 开头
+# 值必须与 initial_state_mapping 中某个 value 一致或是其子路径
 project_dir: ".nanobot/workspace/project/{name}"
 ```
 

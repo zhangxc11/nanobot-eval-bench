@@ -138,3 +138,30 @@
   2. `collect_metrics()` 中 count_dirs 的逻辑同步更新
 - **TASK_SPEC.md 更新**：新增 `project_dir` 字段说明
 - **向后兼容**：无 `project_dir` 字段时走原有逻辑，已有测例不受影响
+
+## Phase 11: 0312 评测反馈改进
+
+> 来源: 0312 第二批评测（task-037~060）反馈分析
+
+### R11.1: PROJECT_DIR 路径机制简化
+
+- project_dir 字段为唯一设置 PROJECT_DIR 的方式
+- 废弃 project_code mapping key 推导和 fallback 目录探测
+- runner.py 新增容错：project_dir 值为 mapping key 时自动修正 + WARNING
+- 所有 code_modification 测例必须有 project_dir 字段
+- project_dir 值必须以 `.nanobot/workspace/` 开头
+
+### R11.2: Docker 镜像环境预装
+
+- Dockerfile.base 预装 Node.js 20.x LTS + pytest-asyncio
+- mock start.sh 空服务 placeholder 固化
+
+### R11.3: task-037 重构
+
+- query.md 去除方案泄露，只保留现象描述
+- verify 脚本改为功能验证，不绑定特定实现
+
+### R11.4: 验证方法效果导向
+
+- task-043/048/051 verify 脚本改为行为验证
+- 通用原则：优先验证行为，其次验证结构

@@ -67,9 +67,10 @@ resource_limits:
   max_tool_calls: 150
   timeout_minutes: 30
 
-# Type B 专用: 显式声明项目目录（推荐）
+# Type B 专用: 显式声明项目目录（必须）
 # 路径相对于 EVAL_HOME（/eval），runner.py 用此设置 PROJECT_DIR 环境变量
-# 优先级：project_dir > initial_state_mapping 中的 project_code key > fallback 探测
+# 值必须与 initial_state_mapping 中某个 value 一致或是其子路径
+# 值必须以 .nanobot/workspace/ 开头
 project_dir: ".nanobot/workspace/project/nanobot"
 
 # Type B 专用: 文件映射
@@ -165,7 +166,7 @@ pytest 脚本通过环境变量获取路径：
 | `RESULTS_DIR` | `/eval/results` | 结果输出目录 |
 | `TASK_ID` | task.yaml 中的 id | 任务 ID |
 | `TASK_NAME` | task.yaml 中的 name | 任务名称 |
-| `PROJECT_DIR` | 由 task.yaml 决定 | 项目代码目录（Type B）。优先级：`project_dir` 字段 > `project_code` mapping key > fallback 探测 |
+| `PROJECT_DIR` | 由 task.yaml project_dir 字段决定 | 项目代码目录（Type B 必填） |
 
 ## 分类列表
 
@@ -241,7 +242,13 @@ HTTPServer(("0.0.0.0", 18080), Handler).serve_forever()
 对应的 `start.sh`：
 ```bash
 #!/bin/bash
-exec python3 /mocks/minimal_mock.py
+# Mock 服务启动脚本
+# 如果有自定义 mock，启动它；否则启动最小 healthcheck placeholder
+if [ -f /mocks/custom_mock.py ]; then
+    exec python3 /mocks/custom_mock.py
+else
+    exec python3 /mocks/minimal_mock.py
+fi
 ```
 
 ## 示例

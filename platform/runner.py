@@ -13,7 +13,7 @@ Two task types:
   - initial_state files map to workspace/ by default
 - Type B (code_modification): Modify nanobot/webchat source code
   - initial_state_mapping controls precise file placement
-  - project_dir field (or project_code mapping key) sets PROJECT_DIR for verify scripts
+  - project_dir field sets PROJECT_DIR for verify scripts (唯一方式)
   - verify_script runs pytest on modified code
 
 Mock provider naming:
@@ -434,20 +434,26 @@ def _run_pytest(script_path: Path, task: dict) -> dict:
     }
 
     # Set PROJECT_DIR for verify scripts
-    # Priority: 1) explicit project_dir field  2) project_code mapping key  3) fallback
+    # 唯一方式: task.yaml 的 project_dir 字段（相对于 EVAL_HOME 的路径）
+    # 容错: 如果路径不存在，检查是否误写了 mapping key，自动修正 + WARNING
     project_dir_value = task.get("project_dir")
     mapping = task.get("initial_state_mapping", {})
     if project_dir_value:
-        env["PROJECT_DIR"] = str(EVAL_HOME / project_dir_value)
-    elif "project_code" in mapping:
-        env["PROJECT_DIR"] = str(EVAL_HOME / mapping["project_code"])
-    else:
-        # Try common project directory paths
-        for candidate in ["project", "project_code"]:
-            candidate_path = WORKSPACE / candidate
-            if candidate_path.exists() and candidate_path.is_dir():
-                env["PROJECT_DIR"] = str(candidate_path)
-                break
+        candidate = EVAL_HOME / project_dir_value
+        if candidate.exists():
+            env["PROJECT_DIR"] = str(candidate)
+        elif project_dir_value in mapping:
+            # 容错: project_dir 填的是 mapping key，自动修正为 mapping value
+            resolved = EVAL_HOME / mapping[project_dir_value]
+            env["PROJECT_DIR"] = str(resolved)
+            print(f"[runner] WARNING: project_dir '{project_dir_value}' is a mapping key, "
+                  f"auto-resolved to '{mapping[project_dir_value]}'. "
+                  f"Please fix task.yaml to use the full path.", file=sys.stderr)
+        else:
+            env["PROJECT_DIR"] = str(candidate)
+            print(f"[runner] WARNING: project_dir '{project_dir_value}' does not exist at {candidate}",
+                  file=sys.stderr)
+    # 不再支持 project_code key 推导和 fallback 探测
 
     # Run pytest with JSON report
     json_report = RESULTS_DIR / "pytest_report.json"
@@ -582,13 +588,19 @@ def collect_metrics(start_time: float, task: dict) -> RunMetrics:
     project_dir_value = task.get("project_dir")
     mapping = task.get("initial_state_mapping", {})
     if project_dir_value:
-        count_dirs.append(EVAL_HOME / project_dir_value)
-    elif "project_code" in mapping:
-        count_dirs.append(EVAL_HOME / mapping["project_code"])
-    else:
-        doubao_dir = WORKSPACE / "skills" / "doubao-search"
-        if doubao_dir.exists():
-            count_dirs.append(doubao_dir)
+        candidate = EVAL_HOME / project_dir_value
+        if candidate.exists():
+            count_dirs.append(candidate)
+        elif project_dir_value in mapping:
+            resolved = EVAL_HOME / mapping[project_dir_value]
+            if resolved.exists():
+                count_dirs.append(resolved)
+    # fallback: 如果没有 project_dir，尝试 workspace/skills 下的目录
+    if not count_dirs:
+        for skill_dir in (WORKSPACE / "skills").iterdir() if (WORKSPACE / "skills").exists() else []:
+            if skill_dir.is_dir():
+                count_dirs.append(skill_dir)
+                break
 
     for d in count_dirs:
         if d.exists():
