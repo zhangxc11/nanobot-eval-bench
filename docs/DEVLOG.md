@@ -582,3 +582,46 @@
 | `docs/DEVLOG.md` | Phase 10 |
 | `eval-task-builder SKILL.md` | §5.8 更新 |
 | `eval-bench-data: task-032 task.yaml` | 添加 project_dir 字段 |
+
+---
+
+## Phase 11: 0312 评测反馈改进 (2026-03-13)
+
+### 背景
+- 0312 第二批评测（task-037~060，24 测例）：16 PASS / 8 FAIL
+- 8 个 FAIL 归因：框架 bug 2 + 测例设计 4 + 环境缺失 1.5 + Agent 真实不足 0.5
+- 排除框架和测例问题后，Agent 真实失败率仅 ~6%
+
+### 任务清单
+
+#### P0-1: PROJECT_DIR 路径机制简化
+- [x] runner.py: project_dir 字段为唯一设置方式，废弃 project_code key 和 fallback
+- [x] runner.py: 新增容错（误写 mapping key 时自动修正 + WARNING）
+- [x] TASK_SPEC.md: project_dir 从推荐改为必填
+- [x] REQUIREMENTS.md: 新增 R11.1~R11.4
+- [x] eval-task-builder skill 文档同步（SKILL.md, BUILD_GUIDE.md, PROJECT_DIR.md）
+- [x] 全量测例 project_dir 刷新（24 个 task.yaml 修改，39/39 质检通过）
+- [x] 质检脚本 scripts/check_project_dir.sh
+
+#### P0-2: Docker 镜像环境预装
+- [x] Dockerfile.base: 预装 Node.js 20.x LTS + pytest-asyncio
+- [x] TASK_SPEC.md: mock start.sh 模板更新
+
+#### P0-3: task-037 重构
+- [x] query.md: 删除方案泄露，只保留现象描述
+- [x] verify: 从硬编码变量名改为效果导向验证
+- [x] eval_dimensions: 诊断30% + 功能修复40% + 内存安全15% + 兼容15%
+- [x] eval_prompt.md: 评分维度对齐
+
+#### P1-4: task-043/048/051 验证方法改进
+- [x] task-043: 放宽函数名匹配 + 允许 metadata fallback
+- [x] task-048: 扩大搜索范围到所有输入组件 + 接受多种高度调整方式
+- [x] task-051: 统一 SYSTEM_MSG_PATTERN 接受多种命名
+
+#### P1-5: 质检脚本 + 文档
+- [x] scripts/check_project_dir.sh
+- [x] IMPROVEMENT_PLAN_PHASE11.md
+
+### Git 提交
+- eval-bench: `40e10bb` + `e5109c2`（已推送）
+- eval-bench-data: `049ee74`（本地，远程仓库待配置）
